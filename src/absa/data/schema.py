@@ -1,11 +1,15 @@
 """Aspect-level record contract shared by data, models and evaluation."""
 
+from collections.abc import Sequence
+
 from absa.config import SENTIMENT_LABELS
 
 RECORD_FIELDS = ("review", "aspect", "sentiment")
 
 
-def validate_record(record, allowed_labels=SENTIMENT_LABELS):
+def validate_record(
+    record: object, allowed_labels: Sequence[str] = SENTIMENT_LABELS
+) -> dict[str, object]:
     """Return ``record`` unchanged if valid, otherwise raise ``ValueError``.
 
     A valid record is a mapping with non-empty string ``review`` and
