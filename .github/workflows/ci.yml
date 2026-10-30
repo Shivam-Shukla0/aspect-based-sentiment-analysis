@@ -176,8 +176,10 @@ jobs:
           pip install -e . --no-deps
       - name: Dependencies must be mutually compatible
         run: pip check
-      - name: Record the ML stack versions
-        run: python -c "import numpy, pandas, sklearn, torch, transformers; print('numpy', numpy.__version__, '| pandas', pandas.__version__, '| scikit-learn', sklearn.__version__, '| torch', torch.__version__, '| transformers', transformers.__version__, '| cuda', torch.cuda.is_available())"
+      - name: Environment verification must pass and its record must be written
+        run: |
+          python -m scripts.verify_environment --record "$RUNNER_TEMP/environment"
+          head -n 20 "$RUNNER_TEMP/environment/environment.txt"
       - name: Tests including NumPy and PyTorch reproducibility
         run: pytest -rs
       - name: No copyleft (GPL/AGPL) runtime dependencies
