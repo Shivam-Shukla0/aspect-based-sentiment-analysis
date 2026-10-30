@@ -48,6 +48,8 @@ IDENTITY_RE = re.compile(
     r"claude|anthropic|chatgpt|openai|copilot|codex|cursor|gemini|devin|aider|\[bot\]",
     re.IGNORECASE,
 )
+# Dependency updater, not an AI agent; every other bot identity is still rejected.
+ALLOWED_BOT_IDENTITIES = ("dependabot[bot]",)
 # These files define the patterns above, so they necessarily contain the words.
 TRACE_EXEMPT_FILES = frozenset({"scripts/checks.py", "tests/test_checks.py"})
 
@@ -138,6 +140,8 @@ def check_traces(text: str, what: str) -> list[str]:
 
 def check_identity(identity: str, what: str) -> list[str]:
     """Reject commit authors or committers that are AI agents or bots."""
+    for allowed in ALLOWED_BOT_IDENTITIES:
+        identity = identity.replace(allowed, "")
     if IDENTITY_RE.search(identity):
         return [f"{what}: author/committer {identity!r} looks like an AI agent or bot"]
     return []
