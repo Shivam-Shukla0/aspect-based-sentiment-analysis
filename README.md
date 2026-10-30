@@ -90,7 +90,7 @@ import os
 from google.colab import userdata
 
 os.environ["GITHUB_TOKEN"] = userdata.get("GITHUB_TOKEN")
-!git clone https://$GITHUB_TOKEN@github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
+!git clone https://oauth2:$GITHUB_TOKEN@github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
 %cd aspect-based-sentiment-analysis
 !git remote set-url origin https://github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
 !pip install -q -r requirements.txt
