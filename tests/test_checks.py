@@ -130,9 +130,16 @@ def test_ai_identity_rejected() -> None:
     bot = "Claude <noreply@anthropic.com>|GitHub <noreply@github.com>"
     errors = checks.check_commits([(bot, "feat: add thing")])
     assert any("AI agent or bot" in e for e in errors)
-    bot2 = "dependabot[bot] <1+d@users.noreply.github.com>|GitHub <noreply@github.com>"
+    bot2 = "renovate[bot] <1+r@users.noreply.github.com>|GitHub <noreply@github.com>"
     assert checks.check_commits([(bot2, "feat: add thing")])
     assert checks.check_identity("Shivam Shukla <s@example.com>", "c") == []
+
+
+def test_dependabot_identity_is_allowed() -> None:
+    dependabot = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>|GitHub <noreply@github.com>"
+    assert checks.check_commits([(dependabot, "chore: update setuptools requirement")]) == []
+    mixed = dependabot.replace("GitHub <noreply@github.com>", "Copilot <c@example.com>")
+    assert checks.check_commits([(mixed, "chore: update setuptools requirement")])
 
 
 def test_trace_only_mode_skips_subject_format() -> None:
