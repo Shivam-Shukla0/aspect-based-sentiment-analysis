@@ -182,8 +182,12 @@ jobs:
         run: pytest -rs
       - name: No copyleft (GPL/AGPL) runtime dependencies
         run: |
+          python -m venv "$RUNNER_TEMP/runtime"
+          "$RUNNER_TEMP/runtime/bin/pip" install torch --index-url https://download.pytorch.org/whl/cpu
+          "$RUNNER_TEMP/runtime/bin/pip" install -r requirements.txt
           pip install pip-licenses
-          pip-licenses --partial-match --fail-on="GNU General Public License;GNU Affero General Public License"
+          pip-licenses --python "$RUNNER_TEMP/runtime/bin/python" --partial-match \
+            --fail-on="GNU General Public License;GNU Affero General Public License"
 
   ci-passed:
     if: always()
