@@ -30,7 +30,18 @@ BOT_TRAILER_RE = re.compile(
 )
 GENERATED_RE = re.compile(r"^.*generated (with|by) .*$", re.IGNORECASE | re.MULTILINE)
 
-PR_SECTIONS = ("Summary", "Related issue", "Changes", "Validation", "Not included", "Checklist")
+PR_SECTIONS = (
+    "Summary",
+    "Related issue",
+    "Changes",
+    "Explanation",
+    "Validation",
+    "Not included",
+    "Checklist",
+)
+SECTION_MIN_CHARS = {"Explanation": 150}
+ATTESTATION_RE = re.compile(r"^\s*[-*] \[x\] .*read every line", re.IGNORECASE | re.MULTILINE)
+MAX_CHANGED_LINES = 1500
 ISSUE_TITLE_RE = re.compile(r"^\[(Bug|Feature|Task)\]: \S.{4,}$")
 ISSUE_SECTIONS = {
     "Bug": ("Summary", "Steps to reproduce", "Expected behavior", "Actual behavior", "Environment"),
@@ -78,6 +89,7 @@ def _is_empty(text: str) -> bool:
 
 
 def check_subject(subject: str, what: str) -> list[str]:
+    """Check a title or commit subject against the conventional format and length limit."""
     errors = []
     if not SUBJECT_RE.match(subject):
         errors.append(
@@ -89,30 +101,51 @@ def check_subject(subject: str, what: str) -> list[str]:
 
 
 def check_traces(text: str, what: str) -> list[str]:
+    """Reject bot co-author trailers and 'generated with/by' footers."""
     if BOT_TRAILER_RE.search(text) or GENERATED_RE.search(text):
         return [f"{what} contains a bot co-author trailer or a 'generated with/by' footer"]
     return []
 
 
-def check_pr(title: str, body: str, branch: str) -> list[str]:
-    errors = check_subject(title, "PR title")
-    if not BRANCH_RE.match(branch):
-        errors.append(f"branch name {branch!r} must match <type>/<issue-number>-<kebab-name>")
-    found = sections(body, "##")
+def _check_sections(found: dict[str, str]) -> list[str]:
+    errors = []
     for name in PR_SECTIONS:
         if name not in found:
             errors.append(f"PR body is missing the '## {name}' section")
         elif name == "Related issue":
             if not CLOSES_RE.search(found[name]):
                 errors.append("'Related issue' needs a line 'Closes #<issue>' (or Fixes/Resolves)")
-        elif _is_empty(found[name]):
-            errors.append(f"PR section '{name}' is empty or a placeholder")
-    if UNCHECKED_RE.search(COMMENT_RE.sub("", body)):
+        elif _is_empty(found[name]) or len(found[name]) < SECTION_MIN_CHARS.get(name, 0):
+            errors.append(f"PR section '{name}' is empty, too short or a placeholder")
+    return errors
+
+
+def check_pr_body(body: str) -> list[str]:
+    """Return all problems with a pull request body's sections and checklist."""
+    found = sections(body, "##")
+    visible = COMMENT_RE.sub("", body)
+    errors = _check_sections(found)
+    if found.get("Explanation", "") == found.get("Summary", None):
+        errors.append("PR 'Explanation' must not repeat the 'Summary'")
+    if UNCHECKED_RE.search(visible):
         errors.append("PR checklist has unchecked items")
-    return errors + check_traces(f"{title}\n{body}", "PR title/body")
+    if not ATTESTATION_RE.search(visible):
+        errors.append("PR checklist must include a ticked 'I have read every line' item")
+    return errors
+
+
+def check_pr(title: str, body: str, branch: str, changed_lines: int = 0) -> list[str]:
+    """Return all problems with a pull request's title, body, branch name and size."""
+    errors = check_subject(title, "PR title")
+    if not BRANCH_RE.match(branch):
+        errors.append(f"branch name {branch!r} must match <type>/<issue-number>-<kebab-name>")
+    if changed_lines > MAX_CHANGED_LINES:
+        errors.append(f"PR changes {changed_lines} lines; split it (limit {MAX_CHANGED_LINES})")
+    return errors + check_pr_body(body) + check_traces(f"{title}\n{body}", "PR title/body")
 
 
 def check_commits(messages: list[str]) -> list[str]:
+    """Return all problems with the given commit messages."""
     errors = []
     for message in messages:
         subject = message.strip().splitlines()[0] if message.strip() else ""
@@ -122,6 +155,7 @@ def check_commits(messages: list[str]) -> list[str]:
 
 
 def check_issue(title: str, body: str) -> list[str]:
+    """Return all problems with an issue's title and required sections."""
     match = ISSUE_TITLE_RE.match(title)
     if not match:
         return [f"issue title must look like '[Bug|Feature|Task]: summary', got {title!r}"]
@@ -136,10 +170,12 @@ def check_issue(title: str, body: str) -> list[str]:
 
 
 def find_secrets(text: str) -> list[str]:
+    """Return the patterns of any credential-like strings found in ``text``."""
     return [p.pattern for p in SECRET_PATTERNS if p.search(text)]
 
 
 def check_text_hygiene(name: str, text: str) -> list[str]:
+    """Check line endings, trailing whitespace and the final newline."""
     errors = []
     if "\r" in text:
         errors.append(f"{name}: contains CR characters (use LF line endings)")
@@ -154,12 +190,13 @@ def check_text_hygiene(name: str, text: str) -> list[str]:
 
 
 def check_notebook(name: str, text: str) -> list[str]:
+    """Validate notebook format and require that no outputs are stored."""
     import nbformat  # noqa: PLC0415  (only needed for notebooks)
 
     try:
         notebook = nbformat.reads(text, as_version=4)  # type: ignore[no-untyped-call]
         nbformat.validate(notebook)
-    except Exception as exc:
+    except (ValueError, nbformat.ValidationError) as exc:
         return [f"{name}: invalid notebook: {exc}"]
     errors = []
     for index, cell in enumerate(notebook.cells):
@@ -169,6 +206,7 @@ def check_notebook(name: str, text: str) -> list[str]:
 
 
 def check_links(root: Path, name: str, text: str) -> list[str]:
+    """Report relative Markdown links that point to missing files."""
     base = (root / name).parent
     return [
         f"{name}: broken relative link {target!r}"
@@ -178,6 +216,7 @@ def check_links(root: Path, name: str, text: str) -> list[str]:
 
 
 def check_by_type(root: Path, name: str, text: str) -> list[str]:
+    """Run the format-specific validator for ``name``, if there is one."""
     if name.endswith(".ipynb"):
         return check_notebook(name, text)
     if name.endswith(".md"):
@@ -193,6 +232,7 @@ def check_by_type(root: Path, name: str, text: str) -> list[str]:
 
 
 def check_files(root: Path, files: list[str]) -> list[str]:
+    """Run every repository hygiene check over the tracked ``files``."""
     errors = [f"required file missing: {name}" for name in REQUIRED_FILES if name not in files]
     for name in files:
         path = root / name
@@ -218,10 +258,16 @@ def _report(errors: list[str]) -> int:  # pragma: no cover
 
 
 def main(argv: list[str]) -> int:  # pragma: no cover
+    """Dispatch the CI sub-command named in ``argv`` and return the exit code."""
     env = os.environ
     command = argv[1] if len(argv) > 1 else ""
     if command == "pr":
-        errors = check_pr(env["PR_TITLE"], env.get("PR_BODY", ""), env["PR_BRANCH"])
+        errors = check_pr(
+            env["PR_TITLE"],
+            env.get("PR_BODY", ""),
+            env["PR_BRANCH"],
+            int(env["PR_ADDITIONS"]) + int(env["PR_DELETIONS"]),
+        )
     elif command == "commits":
         log = subprocess.run(
             ["git", "log", "--format=%B%x00", f"{env['BASE_SHA']}..{env['HEAD_SHA']}"],

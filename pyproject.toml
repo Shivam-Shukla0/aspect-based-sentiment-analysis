@@ -16,7 +16,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-addopts = "-ra --strict-markers --strict-config --cov=absa --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=90"
+addopts = "-ra --strict-markers --strict-config --cov=absa --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=95"
 filterwarnings = ["error"]
 
 [tool.coverage.report]
@@ -31,10 +31,24 @@ extend-exclude = [".venv"]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "C90", "SIM", "PT", "RUF",
   "S", "T20", "PL", "ERA", "PERF", "PIE", "RET", "TID", "ARG", "PTH", "ISC",
+  "D", "TD", "FIX", "FBT", "BLE", "TRY", "EM", "PGH", "SLF", "RSE", "DTZ", "LOG", "G", "INP", "T10",
 ]
+ignore = ["TRY003", "TRY004", "EM101", "EM102"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 10
+max-statements = 40
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "PLR2004"]
+"tests/*" = ["S101", "PLR2004", "D", "SLF001", "INP001"]
+"scripts/__init__.py" = ["D104"]
 "scripts/*" = ["T201", "S603", "S607"]
 
 [tool.mypy]
@@ -48,3 +62,7 @@ ignore_missing_imports = true
 
 [tool.codespell]
 skip = "./.git,./.venv"
+
+[tool.vulture]
+paths = ["src", "scripts"]
+min_confidence = 80

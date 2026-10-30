@@ -10,6 +10,10 @@ Closes #
 
 <!-- Bullet list of the main changes. -->
 
+## Explanation
+
+<!-- In your own words: how does this work, what did you check yourself, and what could break? -->
+
 ## Validation
 
 <!-- Commands you ran and their real results. -->
@@ -25,4 +29,5 @@ Closes #
 - [ ] `mypy` passes
 - [ ] `pytest` passes
 - [ ] No datasets, checkpoints, secrets, or notebook outputs are committed
+- [ ] I have read every line of this diff and can explain it
 - [ ] Docs are updated where behavior changed

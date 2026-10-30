@@ -2,7 +2,7 @@
 
 Course project (4 members, 14 days). Given a product review, identify the aspects it discusses and the sentiment toward each one.
 
-> **Status: scaffold only.** No model is implemented, trained or evaluated yet. Every component below is marked *planned* until it exists.
+> **Status: scaffold only.** No model is implemented, trained or evaluated yet. Every component below is marked _planned_ until it exists.
 
 ## Why aspect-based?
 
@@ -24,11 +24,11 @@ The JSON above is an illustration of the output contract, not a model prediction
 
 ## Approaches
 
-| # | Approach | Module | Status |
-|---|----------|--------|--------|
-| 1 | LSTM with aspect attention | `src/absa/models/lstm_attention.py` | planned |
-| 2 | BERT sentence-pair classification | `src/absa/models/bert_classifier.py` | planned |
-| 3 | LLM prompting for aspect and sentiment extraction | `src/absa/extraction/` | planned |
+| #   | Approach                                          | Module                               | Status  |
+| --- | ------------------------------------------------- | ------------------------------------ | ------- |
+| 1   | LSTM with aspect attention                        | `src/absa/models/lstm_attention.py`  | planned |
+| 2   | BERT sentence-pair classification                 | `src/absa/models/bert_classifier.py` | planned |
+| 3   | LLM prompting for aspect and sentiment extraction | `src/absa/extraction/`               | planned |
 
 Approaches 1 and 2 classify sentiment for a **supplied** aspect. End-to-end evaluation also needs aspect extraction (approach 3 or another extractor), so the two settings are reported separately.
 
@@ -94,11 +94,16 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. The full CI check set can be run locally:
+Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. The full CI check set can be run locally (see [CONTRIBUTING.md](CONTRIBUTING.md#running-ci-locally)).
+
+## Docker
 
 ```bash
-ruff check . && ruff format --check . && mypy && codespell && yamllint --strict . && actionlint && python -m scripts.checks repo
+docker build -t absa .
+echo '{"review": "The battery is weak.", "aspect": "battery", "sentiment": "negative"}' | docker run --rm -i absa validate
 ```
+
+The image only contains the lightweight package and its record-validation CLI (`python -m absa validate`). It does not contain any model.
 
 ## Team workflow
 

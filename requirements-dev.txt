@@ -1,9 +1,15 @@
-ruff
+actionlint-py
+build
+codespell
 mypy
+nbformat
+pip-audit
 pytest
 pytest-cov
-nbformat
-yamllint
-codespell
-actionlint-py
+ruff
+shellcheck-py
 tomli; python_version < "3.11"
+twine
+vulture
+yamllint
+zizmor

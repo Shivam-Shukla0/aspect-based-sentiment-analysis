@@ -16,6 +16,11 @@ Closes #12
 ## Changes
 - New encoder module and tests.
 
+## Explanation
+The encoder joins review and aspect with a separator token so the model sees both.
+I ran it on three synthetic reviews and compared token ids by hand.
+An empty aspect would break it, so the validator rejects that case.
+
 ## Validation
 pytest: 30 passed.
 
@@ -25,6 +30,7 @@ Training loop.
 ## Checklist
 - [x] Tests pass
 - [x] No secrets
+- [x] I have read every line of this diff and can explain it
 """
 
 
@@ -221,3 +227,37 @@ def test_binary_files_are_skipped(tmp_path: Path) -> None:
     (tmp_path / "img.png").write_bytes(b"\xff\xfe\x00")
     errors = checks.check_files(tmp_path, ["img.png"])
     assert not any("img.png" in e for e in errors)
+
+
+def _with_explanation(text: str) -> str:
+    start = PR_BODY.index("## Explanation")
+    end = PR_BODY.index("## Validation")
+    return PR_BODY[:start] + f"## Explanation\n{text}\n\n" + PR_BODY[end:]
+
+
+def test_short_explanation_fails() -> None:
+    errors = checks.check_pr("feat: add thing", _with_explanation("Short."), "feature/1-x")
+    assert any("'Explanation' is empty, too short" in e for e in errors)
+
+
+def test_explanation_must_not_repeat_summary() -> None:
+    text = "x" * 160
+    body = _with_explanation(text).replace("Adds the BERT pair encoder.", text)
+    errors = checks.check_pr("feat: add thing", body, "feature/1-x")
+    assert any("repeat" in e for e in errors)
+
+
+def test_attestation_required() -> None:
+    body = PR_BODY.replace("- [x] I have read every line of this diff and can explain it\n", "")
+    errors = checks.check_pr("feat: add thing", body, "feature/1-x")
+    assert any("read every line" in e for e in errors)
+
+
+def test_oversized_pr_fails() -> None:
+    assert (
+        checks.check_pr("feat: add thing", PR_BODY, "feature/1-x", checks.MAX_CHANGED_LINES) == []
+    )
+    errors = checks.check_pr(
+        "feat: add thing", PR_BODY, "feature/1-x", checks.MAX_CHANGED_LINES + 1
+    )
+    assert any("split it" in e for e in errors)
