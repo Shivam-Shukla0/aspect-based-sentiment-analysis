@@ -41,6 +41,8 @@ predictions -> evaluation (shared protocol) -> reports
 review text -> inference -> {"review", "predictions": [{"aspect", "sentiment"}]}
 ```
 
+Package responsibilities, the rules for which package may import which, and where scripts and the web app live are in [docs/architecture.md](docs/architecture.md). The import rules are checked by `tests/test_architecture.py`.
+
 ## Dataset
 
 SemEval-2014 Task 4, <https://alt.qcri.org/semeval2014/task4/>. Data is not committed. See [data/README.md](data/README.md) for download, citation, splits, record schema and the handling of the `conflict` label. The original train/test separation is preserved.
@@ -48,15 +50,18 @@ SemEval-2014 Task 4, <https://alt.qcri.org/semeval2014/task4/>. Data is not comm
 ## Repository structure
 
 ```
-src/absa/        config, data schema, models, extraction, evaluation, inference
+src/absa/        config, reproducibility, data, models, extraction, evaluation, inference
+scripts/         experiment entry points (planned) and CI tooling
 notebooks/       one planning notebook per experiment (no results yet)
 tests/           offline pytest suite using synthetic records
+docs/            architecture and dependency rules
 data/            raw/ and processed/ (git-ignored), data README
 outputs/         generated artifacts (git-ignored)
 reports/         course report material
+app/             Flask backend and frontend (planned, does not exist yet)
 ```
 
-A web demo under `app/` is a possible later addition and does not exist yet.
+See [docs/architecture.md](docs/architecture.md) for what each package does and may import.
 
 ## Environment setup (Kali Linux, CPU)
 
@@ -111,7 +116,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): issue first, feature branch, pull reques
 
 ## Implementation status
 
-- Done: project layout, config, record schema validation, tests.
+- Done: project layout, config, record schema validation, seeding helper, leakage guard, architecture document and import-rule tests.
 - Planned: data parsing and splits, LSTM-attention, BERT classifier, LLM extraction, evaluation, inference, demo app.
 
 ## Limitations and reproducibility

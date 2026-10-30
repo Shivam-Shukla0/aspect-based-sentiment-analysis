@@ -53,4 +53,4 @@ docker build -t absa:ci . && scripts/smoke_test.sh docker run --rm -i absa:ci
 
 ## Shared contracts
 
-Changes to the record schema (`src/absa/data/schema.py`, `data/README.md`) or the evaluation protocol (`src/absa/evaluation/`) affect everyone. Each has one owner, to be named by the team here: data schema — _TBD_; evaluation protocol — _TBD_. Changes need that owner's review.
+Changes to the record schema (`src/absa/data/schema.py`, `data/README.md`) or the evaluation protocol (`src/absa/evaluation/`) affect everyone. Each has one owner, to be named by the team here: data schema — _TBD_; evaluation protocol — _TBD_. Changes need that owner's review. The package dependency rules (`docs/architecture.md` and `tests/test_architecture.py`) are shared as well: change both together, and ask every workstream for review.
