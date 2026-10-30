@@ -1,0 +1,11 @@
+# PyTorch is intentionally not pinned to a CUDA build; see README "Environment setup".
+numpy
+pandas
+scikit-learn
+lxml
+torch
+transformers
+accelerate
+sentencepiece
+matplotlib
+pytest

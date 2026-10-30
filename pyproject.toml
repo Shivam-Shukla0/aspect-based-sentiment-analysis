@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "absa"
+version = "0.1.0"
+description = "Aspect-based sentiment analysis of product reviews on SemEval-2014 Task 4"
+readme = "README.md"
+requires-python = ">=3.10"
+# Runtime dependencies are listed in requirements.txt to keep a single source of truth.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

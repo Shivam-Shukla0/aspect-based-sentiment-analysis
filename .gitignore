@@ -1,0 +1,45 @@
+# Environments and secrets
+.venv/
+venv/
+env/
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Datasets (check SemEval licence before redistributing)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/README.md
+
+# Model weights and generated outputs
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+outputs/*
+!outputs/README.md
+logs/
+runs/
+wandb/
+.cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
