@@ -29,6 +29,7 @@ CI must be green before merge:
 - Docker: hadolint, image build, container smoke test, non-root user check.
 - ML environment: a separate job installs CPU PyTorch and `requirements.txt`, runs `pip check`, runs the NumPy/PyTorch reproducibility tests, and fails on GPL/AGPL dependencies. The whole pipeline also runs weekly to catch upstream breakage.
 - Data and experiments: use `absa.reproducibility.set_seed` in every experiment and `absa.data.leakage.assert_no_leakage` before evaluating, so train and test reviews never overlap.
+- No AI-agent attribution anywhere: commit messages, commit authors and committers, PR titles and bodies, issue text, review and issue comments, and tracked files are scanned for attribution trailers, footers and signatures, and every push to `main` is checked too. Any hit fails CI.
 - Supply chain: `pip-audit`, and GitHub Actions pinned to commit SHAs.
 - Repository hygiene: secrets, large files, datasets or checkpoints, notebook outputs, line endings, broken links.
 

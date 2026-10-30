@@ -29,6 +29,27 @@ BOT_TRAILER_RE = re.compile(
     r"^co-authored-by:.*noreply@(?!users\.noreply\.github\.com)", re.IGNORECASE | re.MULTILINE
 )
 GENERATED_RE = re.compile(r"^.*generated (with|by) .*$", re.IGNORECASE | re.MULTILINE)
+AI_NAMES = (
+    r"claude|anthropic|chatgpt|openai|gpt-?[0-9]*|copilot|codex|cursor|gemini|bard|aider|devin"
+    r"|windsurf|codeium|tabnine|cody|llama|mistral|deepseek|grok|perplexity|\bai\b|\bllm\b"
+    r"|ai[- ](?:agent|assistant|tool)"
+)
+AI_ATTRIBUTION_RE = re.compile(
+    r"\b(?:co-authored-by|generated|created|made|written|authored|assisted|powered|built|"
+    rf"drafted|reviewed|signed-off)(?:-by|\s+(?:with|by))?\b[^\n]*(?:{AI_NAMES})",
+    re.IGNORECASE,
+)
+AI_SIGNATURE_RE = re.compile(
+    r"claude\.com/claude-code|claude code|@anthropic\.com|@openai\.com|cursoragent@"
+    r"|copilot-swe-agent|github-copilot|\U0001f916 generated",
+    re.IGNORECASE,
+)
+IDENTITY_RE = re.compile(
+    r"claude|anthropic|chatgpt|openai|copilot|codex|cursor|gemini|devin|aider|\[bot\]",
+    re.IGNORECASE,
+)
+# These files define the patterns above, so they necessarily contain the words.
+TRACE_EXEMPT_FILES = frozenset({"scripts/checks.py", "tests/test_checks.py"})
 
 PR_SECTIONS = (
     "Summary",
@@ -100,11 +121,36 @@ def check_subject(subject: str, what: str) -> list[str]:
     return errors
 
 
+def find_ai_traces(text: str) -> bool:
+    """Return True if ``text`` carries an AI-agent attribution, trailer, footer or signature."""
+    return any(
+        pattern.search(text)
+        for pattern in (BOT_TRAILER_RE, GENERATED_RE, AI_ATTRIBUTION_RE, AI_SIGNATURE_RE)
+    )
+
+
 def check_traces(text: str, what: str) -> list[str]:
-    """Reject bot co-author trailers and 'generated with/by' footers."""
-    if BOT_TRAILER_RE.search(text) or GENERATED_RE.search(text):
-        return [f"{what} contains a bot co-author trailer or a 'generated with/by' footer"]
+    """Reject AI-agent attributions, bot co-author trailers and 'generated with/by' footers."""
+    if find_ai_traces(text):
+        return [f"{what} contains an AI-agent attribution, bot co-author trailer or signature"]
     return []
+
+
+def check_identity(identity: str, what: str) -> list[str]:
+    """Reject commit authors or committers that are AI agents or bots."""
+    if IDENTITY_RE.search(identity):
+        return [f"{what}: author/committer {identity!r} looks like an AI agent or bot"]
+    return []
+
+
+def parse_log(log: str) -> list[tuple[str, str]]:
+    """Split ``git log --format=%an <%ae>|%cn <%ce>%x01%B%x00`` output into (identity, message)."""
+    entries = []
+    for chunk in log.split("\x00"):
+        if chunk.strip():
+            identity, _, message = chunk.partition("\x01")
+            entries.append((identity.strip(), message))
+    return entries
 
 
 def _check_sections(found: dict[str, str]) -> list[str]:
@@ -144,23 +190,25 @@ def check_pr(title: str, body: str, branch: str, changed_lines: int = 0) -> list
     return errors + check_pr_body(body) + check_traces(f"{title}\n{body}", "PR title/body")
 
 
-def check_commits(messages: list[str]) -> list[str]:
-    """Return all problems with the given commit messages."""
+def check_commits(entries: list[tuple[str, str]], *, check_format: bool = True) -> list[str]:
+    """Return all problems with (identity, message) commit entries."""
     errors = []
-    for message in messages:
+    for identity, message in entries:
         subject = message.strip().splitlines()[0] if message.strip() else ""
-        errors += check_subject(subject, f"commit subject {subject!r}")
+        if check_format:
+            errors += check_subject(subject, f"commit subject {subject!r}")
         errors += check_traces(message, f"commit {subject!r}")
+        errors += check_identity(identity, f"commit {subject!r}")
     return errors
 
 
 def check_issue(title: str, body: str) -> list[str]:
     """Return all problems with an issue's title and required sections."""
+    errors = check_traces(f"{title}\n{body}", "issue title/body")
     match = ISSUE_TITLE_RE.match(title)
     if not match:
-        return [f"issue title must look like '[Bug|Feature|Task]: summary', got {title!r}"]
+        return [*errors, f"issue title must look like '[Bug|Feature|Task]: summary', got {title!r}"]
     found = sections(body, "###")
-    errors = []
     for name in ISSUE_SECTIONS[match.group(1)]:
         if name not in found:
             errors.append(f"issue is missing the '{name}' section")
@@ -247,7 +295,19 @@ def check_files(root: Path, files: list[str]) -> list[str]:
         errors += [f"{name}: possible secret ({p})" for p in find_secrets(text)]
         errors += check_text_hygiene(name, text)
         errors += check_by_type(root, name, text)
+        if name not in TRACE_EXEMPT_FILES:
+            errors += check_traces(text, name)
     return errors
+
+
+def git_commits(base: str, head: str) -> list[tuple[str, str]]:  # pragma: no cover
+    """Read commits in ``base..head``; without a usable ``base`` only ``head`` is read."""
+    fmt = "--format=%an <%ae>|%cn <%ce>%x01%B%x00"
+    span = [f"{base}..{head}"] if base.strip("0") else ["-1", head]
+    log = subprocess.run(
+        ["git", "log", fmt, *span], check=True, capture_output=True, text=True
+    ).stdout
+    return parse_log(log)
 
 
 def _report(errors: list[str]) -> int:  # pragma: no cover
@@ -268,12 +328,12 @@ def main(argv: list[str]) -> int:  # pragma: no cover
             env["PR_BRANCH"],
             int(env["PR_ADDITIONS"]) + int(env["PR_DELETIONS"]),
         )
-    elif command == "commits":
-        log = subprocess.run(
-            ["git", "log", "--format=%B%x00", f"{env['BASE_SHA']}..{env['HEAD_SHA']}"],
-            check=True, capture_output=True, text=True,
-        ).stdout  # fmt: skip
-        errors = check_commits([m for m in log.split("\x00") if m.strip()])
+    elif command in ("commits", "traces"):
+        errors = check_commits(
+            git_commits(env.get("BASE_SHA", ""), env["HEAD_SHA"]), check_format=command == "commits"
+        )
+    elif command == "text":
+        errors = check_traces(env.get("TRACE_TEXT", ""), "text")
     elif command == "issue":
         errors = check_issue(env["ISSUE_TITLE"], env.get("ISSUE_BODY", ""))
     elif command == "repo":

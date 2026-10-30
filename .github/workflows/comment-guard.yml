@@ -1,0 +1,29 @@
+name: Comment guard
+
+on:
+  # Safe: read-only token, no secrets, default-branch checkout, comment text only via env.
+  issue_comment: # zizmor: ignore[dangerous-triggers]
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  no-ai-attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Comments and reviews must not carry AI-agent attribution
+        env:
+          TRACE_TEXT: ${{ github.event.comment.body || github.event.review.body }}
+        run: python -m scripts.checks text
