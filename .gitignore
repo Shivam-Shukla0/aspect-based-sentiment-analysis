@@ -43,3 +43,8 @@ wandb/
 .DS_Store
 .idea/
 .vscode/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
