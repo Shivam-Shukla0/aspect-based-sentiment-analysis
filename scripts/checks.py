@@ -62,7 +62,7 @@ PR_SECTIONS = (
 )
 SECTION_MIN_CHARS = {"Explanation": 150}
 ATTESTATION_RE = re.compile(r"^\s*[-*] \[x\] .*read every line", re.IGNORECASE | re.MULTILINE)
-MAX_CHANGED_LINES = 1500
+MAX_CHANGED_LINES = 2000
 ISSUE_TITLE_RE = re.compile(r"^\[(Bug|Feature|Task)\]: \S.{4,}$")
 ISSUE_SECTIONS = {
     "Bug": ("Summary", "Steps to reproduce", "Expected behavior", "Actual behavior", "Environment"),

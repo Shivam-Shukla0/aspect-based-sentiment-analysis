@@ -15,7 +15,7 @@
 - Use the pull request template. The title must be `type(scope): subject`, the branch `<type>/<issue-number>-<name>`, every commit subject `type(scope): subject`, and the body needs `Closes #<issue>`.
 - The `Explanation` section must say, in your own words, how the change works, what you checked yourself, and what could break. Do not copy the summary.
 - Tick "I have read every line of this diff and can explain it" only if it is true. Reviewers may ask you to walk through any line.
-- Keep PRs under 1500 changed lines. Split larger work.
+- Keep PRs under 2000 changed lines. Split larger work.
 - Open issues with an issue form; title prefix and required sections are validated.
 - Every PR needs 2 approvals including a code owner, approvals are dismissed when new commits are pushed, the last pusher cannot approve their own push, and all review conversations must be resolved.
 
