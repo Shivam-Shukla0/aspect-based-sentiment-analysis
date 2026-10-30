@@ -136,7 +136,10 @@ def test_ai_identity_rejected() -> None:
 
 
 def test_dependabot_identity_is_allowed() -> None:
-    dependabot = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>|GitHub <noreply@github.com>"
+    dependabot = (
+        "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"
+        "|GitHub <noreply@github.com>"
+    )
     assert checks.check_commits([(dependabot, "chore: update setuptools requirement")]) == []
     mixed = dependabot.replace("GitHub <noreply@github.com>", "Copilot <c@example.com>")
     assert checks.check_commits([(mixed, "chore: update setuptools requirement")])
