@@ -13,7 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import tomllib
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover
+    import tomli as tomllib
 
 TYPES = "feat|fix|docs|test|chore|refactor|ci|build|perf|style"
 SUBJECT_RE = re.compile(rf"^({TYPES})(\([a-z0-9-]+\))?: [a-z0-9].+$")
