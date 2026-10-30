@@ -90,10 +90,15 @@ Download the SemEval-2014 files into `data/raw/` as described in [data/README.md
 ## Tests
 
 ```bash
+pip install -r requirements-dev.txt
 pytest
 ```
 
-Tests run offline and use small synthetic records.
+Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. The full CI check set can be run locally:
+
+```bash
+ruff check . && ruff format --check . && mypy && codespell && yamllint --strict . && actionlint && python -m scripts.checks repo
+```
 
 ## Team workflow
 

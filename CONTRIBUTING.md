@@ -12,7 +12,9 @@
 
 - Describe what changed, how it was validated (commands and real results) and what is not done.
 - At least one teammate reviews before merge. Reviewers check correctness, tests, and that no results are claimed that were not produced.
-- Run `pytest` before requesting review; it must pass.
+- Use the pull request template. The title must be `type(scope): subject`, the branch `<type>/<issue-number>-<name>`, every commit subject `type(scope): subject`, and the body needs `Closes #<issue>` and all checklist items ticked.
+- Open issues with an issue form; title prefix and required sections are validated.
+- CI must be green: ruff lint and format, mypy (strict), codespell, yamllint, actionlint, pytest on Python 3.10 to 3.13 with a coverage floor, and repository hygiene checks (secrets, large files, notebook outputs, broken links). Install tools with `pip install -r requirements-dev.txt`.
 
 ## Do not commit
 
