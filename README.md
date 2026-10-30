@@ -66,22 +66,61 @@ source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 pip install -e .
+python -m scripts.verify_environment
 ```
 
-Installing the CPU build of `torch` first means `requirements.txt` will not replace it. Dependencies are unpinned; record the versions you used (`pip freeze`) alongside any reported result.
+The last command prints the Python, package and device versions, then `environment ok`, and exits 0. It exits 1 and names the problem if Python is older than 3.10 or a core package is missing or broken. On Kali the device line reads `CUDA not available, running on CPU`.
+
+- Always use a virtual environment: recent Kali releases mark the system Python as externally managed, so a global `pip install` is refused.
+- Install the CPU build of `torch` first. The default Linux wheel pulls in several gigabytes of CUDA libraries, and `requirements.txt` does not replace a `torch` that is already installed.
+- Dependencies are unpinned. Do not pin a CUDA build in `requirements.txt`: it would break either Kali (no GPU) or Colab (its own CUDA version).
+- The check needs no network access.
 
 ## Google Colab (GPU)
 
-Colab ships a CUDA-enabled `torch`; do not reinstall it.
+Colab ships a CUDA-enabled `torch`; do not reinstall or upgrade it.
+
+1. Choose a GPU runtime: _Runtime_, _Change runtime type_, then a GPU such as T4.
+2. Store a read-only GitHub token as a Colab secret named `GITHUB_TOKEN` (the key icon in the left bar) and allow this notebook to read it. The repository is private, so cloning needs it.
+3. Run this in the first cell:
 
 ```python
-!git clone https://github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
+import os
+
+from google.colab import userdata
+
+os.environ["GITHUB_TOKEN"] = userdata.get("GITHUB_TOKEN")
+!git clone https://$GITHUB_TOKEN@github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
 %cd aspect-based-sentiment-analysis
-!pip install -q numpy pandas scikit-learn lxml transformers accelerate sentencepiece matplotlib pytest
+!git remote set-url origin https://github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
+!pip install -q -r requirements.txt
 !pip install -q -e . --no-deps
+!python -m scripts.verify_environment --require-gpu
 ```
 
-The repository is private, so cloning requires authentication; use a Colab secret, never a token pasted into a notebook. Upload the dataset to the Colab session or Drive; do not commit it.
+The `set-url` line removes the token from `.git/config`. The last line prints the GPU name and CUDA version, and exits 1 if the runtime has no GPU. `requirements.txt` leaves `torch` unpinned, so pip keeps the version Colab already has.
+
+Known pitfalls:
+
+- **Sessions reset.** The VM disk is wiped when the session ends or idles out, and GPU availability is not guaranteed on the free tier. Repeat the cell above in every new session, and copy results to Drive when a run finishes.
+- **Drive.** Mount it with `from google.colab import drive; drive.mount("/content/drive")`, then copy, for example, `!cp -r outputs/<experiment> /content/drive/MyDrive/absa/`. Keep checkpoints and datasets there, never in Git.
+- **Secrets.** Read tokens and API keys with `userdata.get`. Never paste them into a cell or let them appear in a cell output, and clear notebook outputs before committing.
+- **Restart prompts.** If pip replaces a package that is already imported, Colab asks for a restart. Restart the runtime and run the cell again.
+
+## Recording the environment for a result
+
+Every result in a report, table or pull request must be traceable to the environment that produced it. In the session that produced a result, run:
+
+```bash
+python -m scripts.verify_environment --record outputs/<experiment>/
+```
+
+This writes `outputs/<experiment>/environment.txt` with the Python and platform versions, the device, the git commit, and every installed package as `name==version`, sorted by name (the project itself is left out). Convention:
+
+- Keep one `outputs/<experiment>/` directory per run, with the metrics, the checkpoint and `environment.txt` together. On Colab, copy the whole directory to Drive.
+- Quote a result together with its seed (see `absa.reproducibility.set_seed`), its git commit and the Python, `torch`, `transformers` and device lines from the record.
+- `outputs/` is git-ignored, so copy those lines into `reports/` or the pull request when you report the result.
+- The file is a record, not a lock file. The `torch` pin carries its build suffix (for example `+cpu`), which is not on PyPI, so rebuild by installing the same `torch` from the matching index.
 
 ## Data preparation
 
