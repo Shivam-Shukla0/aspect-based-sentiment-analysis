@@ -27,6 +27,8 @@ CI must be green before merge:
 - Docs and config: prettier for Markdown, YAML and JSON, codespell, yamllint, actionlint, zizmor, shellcheck.
 - Packaging: wheel build, `twine check`, and a smoke test of the wheel in a clean virtualenv.
 - Docker: hadolint, image build, container smoke test, non-root user check.
+- ML environment: a separate job installs CPU PyTorch and `requirements.txt`, runs `pip check`, runs the NumPy/PyTorch reproducibility tests, and fails on GPL/AGPL dependencies. The whole pipeline also runs weekly to catch upstream breakage.
+- Data and experiments: use `absa.reproducibility.set_seed` in every experiment and `absa.data.leakage.assert_no_leakage` before evaluating, so train and test reviews never overlap.
 - Supply chain: `pip-audit`, and GitHub Actions pinned to commit SHAs.
 - Repository hygiene: secrets, large files, datasets or checkpoints, notebook outputs, line endings, broken links.
 
