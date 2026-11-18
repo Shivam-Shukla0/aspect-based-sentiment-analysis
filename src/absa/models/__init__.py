@@ -8,6 +8,14 @@ from absa.models.lstm_attention import (
     masked_mean,
 )
 from absa.models.lstm_dataset import AspectDataset, build_embedding, collate, make_dataloader
+from absa.models.lstm_evaluation import (
+    ErrorAnalysis,
+    PredictionError,
+    TestEvaluationReport,
+    analyze_errors,
+    evaluate_test_set,
+    predict,
+)
 from absa.models.lstm_tokens import (
     PAD_TOKEN,
     UNK_TOKEN,
@@ -32,17 +40,23 @@ __all__ = [
     "AspectAttention",
     "AspectDataset",
     "EpochMetrics",
+    "ErrorAnalysis",
     "LstmConfig",
     "LstmEncoder",
     "ModelConfig",
+    "PredictionError",
+    "TestEvaluationReport",
     "TrainingResult",
     "Vocabulary",
+    "analyze_errors",
     "build_embedding",
     "collate",
+    "evaluate_test_set",
     "load_checkpoint",
     "make_dataloader",
     "masked_mean",
     "pad_or_truncate",
+    "predict",
     "run_training",
     "save_checkpoint",
     "tokenize",
