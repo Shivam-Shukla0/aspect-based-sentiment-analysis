@@ -1,5 +1,6 @@
 """Aspect-level record schema and validation."""
 
+from absa.data.normalize import build_processed_files, no_aspect_filename, normalize_sentences
 from absa.data.schema import (
     RECORD_FIELDS,
     AspectPrediction,
@@ -24,6 +25,9 @@ __all__ = [
     "ExtractionRecord",
     "ParsedSentence",
     "PredictionRecord",
+    "build_processed_files",
+    "no_aspect_filename",
+    "normalize_sentences",
     "parse_laptop_xml",
     "parse_restaurant_xml",
     "validate_prediction",
