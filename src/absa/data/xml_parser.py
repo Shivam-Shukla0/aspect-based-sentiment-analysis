@@ -29,6 +29,19 @@ class ParsedSentence:
         ExtractionRecord(text=self.text, spans=self.spans)
 
 
+@dataclass(frozen=True, slots=True)
+class CategoryAnnotation:
+    """One ``<aspectCategory>`` element: a coarse-grained, span-free category label.
+
+    Restaurant-domain only. A category is not an aspect term: it has no
+    offsets into the sentence text and must not be treated as a span.
+    """
+
+    sentence_id: str
+    category: str
+    polarity: str
+
+
 def _parse_tree(path: Path) -> etree._Element:
     """Parse ``path`` with entity resolution and network access disabled."""
     parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
@@ -78,6 +91,21 @@ def _parse_sentence(element: etree._Element) -> ParsedSentence:
         raise ValueError(f"<sentence id={sentence_id!r}>: {exc}") from exc
 
 
+def _parse_categories(element: etree._Element, sentence_id: str) -> tuple[CategoryAnnotation, ...]:
+    categories_element = element.find("aspectCategories")
+    if categories_element is None:
+        return ()
+    context = f"<sentence id={sentence_id!r}> aspectCategory"
+    return tuple(
+        CategoryAnnotation(
+            sentence_id=sentence_id,
+            category=_require_attr(category, "category", context),
+            polarity=_require_attr(category, "polarity", context),
+        )
+        for category in categories_element.findall("aspectCategory")
+    )
+
+
 def parse_laptop_xml(path: Path) -> list[ParsedSentence]:
     """Parse a laptop-domain SemEval-2014 XML file into one ``ParsedSentence`` per sentence.
 
@@ -85,3 +113,21 @@ def parse_laptop_xml(path: Path) -> list[ParsedSentence]:
     annotations are parsed, which is all this domain provides.
     """
     return [_parse_sentence(element) for element in _parse_tree(path).findall("sentence")]
+
+
+def parse_restaurant_xml(path: Path) -> tuple[list[ParsedSentence], list[CategoryAnnotation]]:
+    """Parse a restaurant-domain SemEval-2014 XML file.
+
+    Returns term-level sentences (the same shape as ``parse_laptop_xml``,
+    sharing its parsing logic) and the coarse-grained category annotations
+    separately, since a category is not an aspect term and must not be
+    used as one.
+    """
+    elements = _parse_tree(path).findall("sentence")
+    sentences = [_parse_sentence(element) for element in elements]
+    categories = [
+        category
+        for element in elements
+        for category in _parse_categories(element, _require_attr(element, "id", "<sentence>"))
+    ]
+    return sentences, categories
