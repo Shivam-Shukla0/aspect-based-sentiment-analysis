@@ -73,3 +73,55 @@ class LstmEncoder(nn.Module):
         positions = torch.arange(time_steps, device=lengths.device).unsqueeze(0)
         mask = positions < lengths.unsqueeze(1)
         return states, mask
+
+
+def masked_mean(states: Tensor, mask: Tensor) -> Tensor:
+    """Average ``states`` over the time dimension, counting only ``mask``-true positions.
+
+    ``states`` is ``(batch, time, hidden)`` and ``mask`` is ``(batch,
+    time)``. Every row of ``mask`` must have at least one true position.
+    """
+    weights = mask.unsqueeze(-1).to(states.dtype)
+    counts = weights.sum(dim=1)
+    return (states * weights).sum(dim=1) / counts
+
+
+class AspectAttention(nn.Module):
+    """Scores review tokens against an aspect representation and classifies.
+
+    The aspect representation is the masked mean of the aspect's own
+    encoded states (the aspect is run through the same kind of encoder as
+    the review, sharing its hidden size — see ``docs/lstm_architecture.md``
+    for why). Attention uses Luong-style "general" scoring: a learned
+    linear map of the aspect representation is dotted with each review
+    token's hidden state, masked to ``-inf`` at padding before the
+    softmax, so padding gets exactly zero weight.
+    """
+
+    def __init__(self, hidden_size: int, num_classes: int) -> None:
+        """``hidden_size`` must match the encoder's ``output_size``."""
+        super().__init__()
+        self.project_aspect = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(
+        self,
+        review_states: Tensor,
+        review_mask: Tensor,
+        aspect_states: Tensor,
+        aspect_mask: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Classify sentiment, returning ``(logits, attention_weights)``.
+
+        ``review_states``/``aspect_states`` are ``(batch, time, hidden)``
+        and ``review_mask``/``aspect_mask`` are the matching ``(batch,
+        time)`` boolean masks, all from ``LstmEncoder``.
+        """
+        aspect_repr = masked_mean(aspect_states, aspect_mask)
+        projected_aspect = self.project_aspect(aspect_repr)
+        scores = torch.einsum("bth,bh->bt", review_states, projected_aspect)
+        scores = scores.masked_fill(~review_mask, float("-inf"))
+        weights = torch.softmax(scores, dim=-1)
+        context = torch.einsum("bt,bth->bh", weights, review_states)
+        logits = self.classifier(context)
+        return logits, weights
