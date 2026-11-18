@@ -10,6 +10,7 @@ from absa.data.schema import (
     validate_prediction,
     validate_record,
 )
+from absa.data.validation import RecordError, ValidationSummary, read_jsonl, validate_records
 from absa.data.xml_parser import (
     CategoryAnnotation,
     ParsedSentence,
@@ -25,11 +26,15 @@ __all__ = [
     "ExtractionRecord",
     "ParsedSentence",
     "PredictionRecord",
+    "RecordError",
+    "ValidationSummary",
     "build_processed_files",
     "no_aspect_filename",
     "normalize_sentences",
     "parse_laptop_xml",
     "parse_restaurant_xml",
+    "read_jsonl",
     "validate_prediction",
     "validate_record",
+    "validate_records",
 ]
