@@ -9,9 +9,13 @@ separately.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 from torch import Tensor, nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
+from absa.models.lstm_dataset import build_embedding
 
 
 class LstmEncoder(nn.Module):
@@ -124,4 +128,54 @@ class AspectAttention(nn.Module):
         weights = torch.softmax(scores, dim=-1)
         context = torch.einsum("bt,bth->bh", weights, review_states)
         logits = self.classifier(context)
+        return logits, weights
+
+
+@dataclass(frozen=True, slots=True)
+class ModelConfig:
+    """Architecture hyperparameters for ``AbsaLstmModel``."""
+
+    embedding_dim: int = 50
+    hidden_size: int = 32
+    num_layers: int = 1
+    dropout: float = 0.0
+    bidirectional: bool = True
+
+
+class AbsaLstmModel(nn.Module):
+    """The full given-aspect classifier: embedding, shared encoder and attention.
+
+    See ``docs/lstm_architecture.md`` for the design. Takes padded review
+    and aspect id tensors (plus their real lengths, as produced by
+    ``absa.models.lstm_dataset.collate``) and returns ``(logits,
+    attention_weights)``.
+    """
+
+    def __init__(
+        self, vocab_size: int, pad_id: int, num_classes: int, config: ModelConfig = ModelConfig()
+    ) -> None:
+        """Build the embedding, encoder and attention/classifier layers from ``config``."""
+        super().__init__()
+        self.config = config
+        self.embedding = build_embedding(vocab_size, config.embedding_dim, pad_id)
+        self.encoder = LstmEncoder(
+            config.embedding_dim,
+            config.hidden_size,
+            config.num_layers,
+            config.dropout,
+            bidirectional=config.bidirectional,
+        )
+        self.attention = AspectAttention(self.encoder.output_size, num_classes)
+
+    def forward(
+        self,
+        review_ids: Tensor,
+        review_lengths: Tensor,
+        aspect_ids: Tensor,
+        aspect_lengths: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Encode the review and aspect, then classify; returns ``(logits, weights)``."""
+        review_states, review_mask = self.encoder(self.embedding(review_ids), review_lengths)
+        aspect_states, aspect_mask = self.encoder(self.embedding(aspect_ids), aspect_lengths)
+        logits, weights = self.attention(review_states, review_mask, aspect_states, aspect_mask)
         return logits, weights
