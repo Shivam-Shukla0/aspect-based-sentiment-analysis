@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("sklearn")
+
 from absa.evaluation import evaluate
 
 Y_TRUE = ["positive", "positive", "negative", "neutral"]
