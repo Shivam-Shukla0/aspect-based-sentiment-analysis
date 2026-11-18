@@ -9,13 +9,16 @@ from absa.data.schema import (
     validate_prediction,
     validate_record,
 )
+from absa.data.xml_parser import ParsedSentence, parse_laptop_xml
 
 __all__ = [
     "RECORD_FIELDS",
     "AspectPrediction",
     "AspectSpan",
     "ExtractionRecord",
+    "ParsedSentence",
     "PredictionRecord",
+    "parse_laptop_xml",
     "validate_prediction",
     "validate_record",
 ]
