@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("lxml")
+
 from absa.data import parse_restaurant_xml
 
 NORMAL_XML = """<?xml version="1.0" encoding="UTF-8"?>
