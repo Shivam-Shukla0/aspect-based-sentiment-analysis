@@ -1,4 +1,13 @@
-"""Shared evaluation protocol (planned, not yet implemented).
+"""Shared evaluation protocol and metric calculations."""
 
-All approaches must be scored on the original SemEval-2014 test split.
-"""
+from absa.evaluation.extraction import (
+    ExtractionMetrics,
+    compute_span_counts,
+    evaluate_extraction_spans,
+)
+
+__all__ = [
+    "ExtractionMetrics",
+    "compute_span_counts",
+    "evaluate_extraction_spans",
+]
