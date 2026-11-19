@@ -1,6 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("torch")
+pytest.importorskip("sklearn")
 import torch
 
 from absa.models import LstmConfig, load_checkpoint, run_training, save_checkpoint, train
