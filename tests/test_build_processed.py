@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("lxml")
+
 from scripts.build_processed import main
 
 XML = """<?xml version="1.0" encoding="UTF-8"?>
