@@ -1,4 +1,17 @@
-"""Shared evaluation protocol (planned, not yet implemented).
+"""Shared evaluation protocol and metric calculations."""
 
-All approaches must be scored on the original SemEval-2014 test split.
-"""
+from absa.evaluation.e2e import (
+    AspectSentimentPair,
+    ClassificationMetrics,
+    EndToEndMetrics,
+    evaluate_end_to_end,
+    evaluate_given_aspect_classification,
+)
+
+__all__ = [
+    "AspectSentimentPair",
+    "ClassificationMetrics",
+    "EndToEndMetrics",
+    "evaluate_end_to_end",
+    "evaluate_given_aspect_classification",
+]
