@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("lxml")  # needed for the ParsedSentence/AspectSpan fixtures below
+
 from absa.data import (
     AspectSpan,
     ParsedSentence,

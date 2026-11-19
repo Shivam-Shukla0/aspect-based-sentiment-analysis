@@ -3,6 +3,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("torch")
+pytest.importorskip("sklearn")
+
 from absa.models import LstmConfig, save_checkpoint, train
 from scripts.evaluate_lstm import main
 

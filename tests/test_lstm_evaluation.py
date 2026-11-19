@@ -1,6 +1,11 @@
 import json
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("torch")
+pytest.importorskip("sklearn")
+
 from absa.config import SENTIMENT_LABELS
 from absa.models import AbsaLstmModel, LstmConfig, Vocabulary, evaluate_test_set, predict, train
 
