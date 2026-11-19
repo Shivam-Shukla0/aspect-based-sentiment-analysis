@@ -18,6 +18,10 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 addopts = "-ra --strict-markers --strict-config --cov=absa --cov=scripts --cov-branch --cov-report=term-missing --cov-fail-under=95"
 filterwarnings = ["error"]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "gpu: marks tests as requiring GPU resources (deselect with '-m \"not gpu\"')",
+]
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
