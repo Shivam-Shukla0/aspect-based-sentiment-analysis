@@ -1,5 +1,23 @@
-"""Aspect extraction, including LLM prompting (planned, not yet implemented).
+"""Aspect extraction, sequence tagging and prediction contracts."""
 
-Contract: map a review to a list of aspect terms. Needed for end-to-end
-evaluation, since the classifiers above expect the aspect to be supplied.
-"""
+from absa.extraction.bio import (
+    BIO_TAGS,
+    ID_TO_TAG,
+    TAG_TO_ID,
+    BioExample,
+    TokenSpan,
+    align_bio_tags,
+    build_bio_example,
+    tokenize_with_offsets,
+)
+
+__all__ = [
+    "BIO_TAGS",
+    "ID_TO_TAG",
+    "TAG_TO_ID",
+    "BioExample",
+    "TokenSpan",
+    "align_bio_tags",
+    "build_bio_example",
+    "tokenize_with_offsets",
+]
