@@ -9,10 +9,16 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from absa.config import DATA_PROCESSED_DIR, processed_filename
 from absa.data.schema import validate_record
-from absa.data.xml_parser import ParsedSentence
+
+if TYPE_CHECKING:
+    # Only used in type hints below; kept out of runtime imports so this
+    # module (and anything that imports it) does not require lxml just to
+    # normalize already-parsed sentences.
+    from absa.data.xml_parser import ParsedSentence
 
 
 def no_aspect_filename(domain: str, split: str) -> str:
