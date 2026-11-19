@@ -84,7 +84,12 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: pip install -e . --no-deps
-      - run: pytest
+      # This job never installs requirements.txt (numpy/pandas/scikit-learn/lxml/torch),
+      # unlike ml-environment below, which does and keeps the real 95% coverage gate from
+      # pyproject.toml. Without --no-cov here, any module needing one of those libraries
+      # would show 0% in this job specifically and fail the floor for a reason unrelated to
+      # whether it is actually tested (see ml-environment's own run, and issue #65).
+      - run: pytest --no-cov
 
   repo-hygiene:
     runs-on: ubuntu-latest
