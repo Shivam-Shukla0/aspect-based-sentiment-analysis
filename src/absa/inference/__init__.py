@@ -1,5 +1,27 @@
-"""End-to-end inference (planned, not yet implemented).
+"""End-to-end inference protocol and common model interface."""
 
-Output contract per review:
-    {"review": str, "predictions": [{"aspect": str, "sentiment": str}, ...]}
-"""
+from absa.inference.interface import (
+    AspectPrediction,
+    InferenceError,
+    ModelNotFoundError,
+    PredictionRecord,
+    PredictionValidationError,
+    Predictor,
+    clear_registry,
+    get_predictor,
+    list_available_models,
+    register_predictor,
+)
+
+__all__ = [
+    "AspectPrediction",
+    "InferenceError",
+    "ModelNotFoundError",
+    "PredictionRecord",
+    "PredictionValidationError",
+    "Predictor",
+    "clear_registry",
+    "get_predictor",
+    "list_available_models",
+    "register_predictor",
+]
