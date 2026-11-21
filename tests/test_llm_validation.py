@@ -72,9 +72,58 @@ def test_retry_llm_inference_eventual_success() -> None:
 
 def test_retry_llm_inference_exhausted() -> None:
     def broken_generate() -> list[dict[str, str]]:
-        raise ValueError("Unrecoverable error")
+        raise ConnectionError("Service unavailable")
 
     report = ValidationReport()
     with pytest.raises(RuntimeError, match="LLM generation failed after 2 attempts"):
         retry_llm_inference(broken_generate, max_retries=2, report=report)
     assert report.retries_used == 2
+
+
+def test_retry_does_not_repeat_non_transient_errors() -> None:
+    attempts = 0
+
+    def bad_output() -> list[dict[str, str]]:
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("Could not parse response")
+
+    report = ValidationReport()
+    with pytest.raises(ValueError, match="Could not parse"):
+        retry_llm_inference(bad_output, max_retries=3, report=report)
+    assert attempts == 1
+    assert report.retries_used == 0
+
+
+@pytest.mark.parametrize("bad", [0, -1])
+def test_retry_rejects_non_positive_max_retries(bad: int) -> None:
+    with pytest.raises(ValueError, match="max_retries"):
+        retry_llm_inference(list, max_retries=bad)
+
+
+def test_repeated_aspect_gets_successive_spans() -> None:
+    review = "The screen is bright but the screen is small."
+    raw = [
+        {"aspect": "screen", "sentiment": "positive"},
+        {"aspect": "screen", "sentiment": "negative"},
+    ]
+    validated = validate_aspect_predictions(review, raw)
+    assert [(v.start, v.end) for v in validated] == [(4, 10), (29, 35)]
+    assert all(review[v.start : v.end] == v.aspect for v in validated)
+
+
+def test_third_mention_of_a_twice_mentioned_aspect_is_rejected() -> None:
+    review = "The screen is bright but the screen is small."
+    raw = [{"aspect": "screen", "sentiment": "positive"}] * 3
+    report = ValidationReport()
+    validated = validate_aspect_predictions(review, raw, report=report)
+    assert len(validated) == 2
+    assert report.invalid_count == 1
+
+
+def test_case_insensitive_fallback_keeps_the_review_spelling() -> None:
+    review = "Battery Life is great."
+    validated = validate_aspect_predictions(
+        review, [{"aspect": "battery life", "sentiment": "positive"}]
+    )
+    assert [(v.aspect, v.start, v.end) for v in validated] == [("Battery Life", 0, 12)]
