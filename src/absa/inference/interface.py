@@ -155,10 +155,28 @@ def validate_prediction_record(
     return record
 
 
-def predict_validated(predictor: Predictor, review: str) -> PredictionRecord:
-    """Run ``predictor.predict`` and validate its output.
+def predict_validated(
+    predictor: Predictor, review: str, allowed_labels: Sequence[str] = SENTIMENT_LABELS
+) -> PredictionRecord:
+    """Run ``predictor.predict`` on ``review`` and return a validated result.
+
+    The input is checked before the predictor runs, so an empty review is reported as bad
+    input and not as a bad prediction. Any unexpected exception from the predictor is
+    wrapped in ``InferenceError`` with the original error as its cause, and the returned
+    record must carry the same review that was passed in.
 
     Raises:
+        InferenceError: If ``review`` is empty or the predictor fails.
         PredictionValidationError: If the predictor output is invalid.
     """
-    return validate_prediction_record(predictor.predict(review))
+    if not isinstance(review, str) or not review.strip():
+        raise InferenceError("input review must be a non-empty string")
+    try:
+        record = predictor.predict(review)
+    except InferenceError:
+        raise
+    except Exception as err:
+        raise InferenceError(f"Prediction failed: {err}") from err
+    if isinstance(record, PredictionRecord) and record.review != review:
+        raise PredictionValidationError("the returned review differs from the input review")
+    return validate_prediction_record(record, allowed_labels)
