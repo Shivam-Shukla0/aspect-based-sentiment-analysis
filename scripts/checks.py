@@ -241,8 +241,16 @@ def check_text_hygiene(name: str, text: str) -> list[str]:
     return errors
 
 
+MAX_NOTEBOOK_BYTES = 3_000_000
+
+
 def check_notebook(name: str, text: str) -> list[str]:
-    """Validate notebook format and require that no outputs are stored."""
+    """Validate notebook format and size.
+
+    Executed notebooks may be committed with their outputs as a record of a run, but a
+    notebook that has grown past ``MAX_NOTEBOOK_BYTES`` (usually embedded images or logs)
+    is rejected, and the generic secret and large-file checks still apply to its text.
+    """
     import nbformat  # noqa: PLC0415  (only needed for notebooks)
 
     try:
@@ -250,11 +258,10 @@ def check_notebook(name: str, text: str) -> list[str]:
         nbformat.validate(notebook)
     except (ValueError, nbformat.ValidationError) as exc:
         return [f"{name}: invalid notebook: {exc}"]
-    errors = []
-    for index, cell in enumerate(notebook.cells):
-        if cell.cell_type == "code" and (cell.outputs or cell.execution_count is not None):
-            errors.append(f"{name}: cell {index} has stored outputs; clear them before committing")
-    return errors
+    size = len(text.encode("utf-8"))
+    if size > MAX_NOTEBOOK_BYTES:
+        return [f"{name}: notebook is {size} bytes; the limit is {MAX_NOTEBOOK_BYTES}"]
+    return []
 
 
 def check_links(root: Path, name: str, text: str) -> list[str]:

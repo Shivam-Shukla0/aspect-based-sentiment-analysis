@@ -28,6 +28,6 @@ Closes #
 - [ ] `ruff check .` and `ruff format --check .` pass
 - [ ] `mypy` passes
 - [ ] `pytest` passes
-- [ ] No datasets, checkpoints, secrets, or notebook outputs are committed
+- [ ] No datasets, checkpoints or secrets are committed, and notebooks are under the size limit
 - [ ] I have read every line of this diff and can explain it
 - [ ] Docs are updated where behavior changed

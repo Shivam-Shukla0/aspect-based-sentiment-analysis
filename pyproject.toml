@@ -59,7 +59,11 @@ max-statements = 40
 "scripts/*" = ["T201", "S603", "S607"]
 # Request validation is a flat list of early returns, one per rejected field.
 "app/server.py" = ["PLR0911"]
-"notebooks/*" = ["T201", "D100", "INP001"]
+# Notebooks are exploration and run records, so style rules that suit modules are relaxed.
+"notebooks/*" = [
+  "T201", "D100", "D103", "INP001", "E501", "E702", "F401", "B007", "B905",
+  "PERF102", "PERF401", "PTH112", "PTH123", "SIM115",
+]
 
 [tool.mypy]
 strict = true
