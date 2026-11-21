@@ -97,8 +97,10 @@ module = [
   "absa.models.lstm_training",
   "absa.models.bert_classifier",
   "absa.models.bert_extractor",
+  "absa.models.llm_local",
   "tests.test_bert_classifier",
   "tests.test_bert_extractor",
+  "tests.test_llm_local",
 ]
 warn_unused_ignores = false
 

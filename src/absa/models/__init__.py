@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         run_extractor_training,
         train_extractor,
     )
+    from absa.models.llm_local import LocalLLMClient
     from absa.models.lstm_attention import (
         AbsaLstmModel,
         AspectAttention,
@@ -91,6 +92,7 @@ __all__ = [
     "ExtractorResult",
     "HttpLLMClient",
     "LLMClient",
+    "LocalLLMClient",
     "LstmConfig",
     "LstmEncoder",
     "MockLLMClient",
@@ -129,6 +131,7 @@ __all__ = [
 ]
 
 _LAZY = {
+    "LocalLLMClient": "absa.models.llm_local",
     "ExtractorConfig": "absa.models.bert_extractor",
     "ExtractorEpoch": "absa.models.bert_extractor",
     "ExtractorResult": "absa.models.bert_extractor",
