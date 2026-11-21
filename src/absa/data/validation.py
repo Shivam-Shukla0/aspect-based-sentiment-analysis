@@ -60,10 +60,11 @@ class ValidationSummary:
         path.write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
-def _validate_one(
-    index: int, record: Mapping[str, object], allowed_labels: Sequence[str]
-) -> list[RecordError]:
+def _validate_one(index: int, record: object, allowed_labels: Sequence[str]) -> list[RecordError]:
     errors = []
+    if not isinstance(record, Mapping):
+        errors.append(RecordError(index, "empty_review", "record is not a mapping"))
+        return errors
     review = record.get("review")
     aspect = record.get("aspect")
     sentiment = record.get("sentiment")
@@ -78,26 +79,39 @@ def _validate_one(
             )
         )
     start, end = record.get("start"), record.get("end")
-    if (
-        isinstance(start, int)
-        and isinstance(end, int)
-        and isinstance(review, str)
-        and isinstance(aspect, str)
-    ):
-        found = review[start:end]
-        if found != aspect:
+    if start is not None or end is not None:
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or not isinstance(review, str)
+            or not isinstance(aspect, str)
+            or start < 0
+            or end > len(review)
+        ):
             errors.append(
                 RecordError(
                     index,
                     "offset_mismatch",
-                    f"review[{start}:{end}] = {found!r}, expected aspect {aspect!r}",
+                    f"review[{start}:{end}] = ..., expected aspect {aspect!r}",
                 )
             )
+        else:
+            found = review[start:end]
+            if found != aspect:
+                errors.append(
+                    RecordError(
+                        index,
+                        "offset_mismatch",
+                        f"review[{start}:{end}] = {found!r}, expected aspect {aspect!r}",
+                    )
+                )
     return errors
 
 
 def validate_records(
-    records: Iterable[Mapping[str, object]], allowed_labels: Sequence[str] = SENTIMENT_LABELS
+    records: Iterable[object], allowed_labels: Sequence[str] = SENTIMENT_LABELS
 ) -> ValidationSummary:
     """Validate every record and return one summary covering all of them.
 

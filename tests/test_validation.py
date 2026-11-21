@@ -44,6 +44,27 @@ def test_offset_mismatch_detected() -> None:
     assert [e.error_type for e in summary.errors] == ["offset_mismatch"]
 
 
+@pytest.mark.parametrize(("start", "end"), [(-3, 3), (0, -1), (-1, 5)])
+def test_negative_offsets_detected(start: int, end: int) -> None:
+    summary = validate_records([{**VALID, "start": start, "end": end}])
+    assert [e.error_type for e in summary.errors] == ["offset_mismatch"]
+
+
+@pytest.mark.parametrize("bool_val", [True, False])
+def test_boolean_offsets_detected(bool_val: bool) -> None:  # noqa: FBT001
+    summary = validate_records([{**VALID, "start": bool_val, "end": 11}])
+    assert [e.error_type for e in summary.errors] == ["offset_mismatch"]
+    summary = validate_records([{**VALID, "start": 4, "end": bool_val}])
+    assert [e.error_type for e in summary.errors] == ["offset_mismatch"]
+
+
+def test_non_dict_record_detected() -> None:
+    summary = validate_records([[1, 2], VALID])
+    assert summary.total == 2
+    error_types = {e.error_type for e in summary.errors}
+    assert "empty_review" in error_types
+
+
 def test_missing_offsets_is_not_an_error() -> None:
     record = {k: v for k, v in VALID.items() if k not in ("start", "end")}
     summary = validate_records([record])
