@@ -77,3 +77,42 @@ def test_build_pair_dataset_multi_aspect() -> None:
 def test_build_pair_example_invalid_record() -> None:
     with pytest.raises(ValueError, match="record is missing fields"):
         build_pair_example({"review": "Missing aspect", "sentiment": "neutral"})
+
+
+def test_dataset_uses_sentence_id_and_unique_ids_per_aspect() -> None:
+    records: list[dict[str, object]] = [
+        {
+            "sentence_id": "7",
+            "review": "Fast delivery, cracked screen.",
+            "aspect": "delivery",
+            "sentiment": "positive",
+        },
+        {
+            "sentence_id": "7",
+            "review": "Fast delivery, cracked screen.",
+            "aspect": "screen",
+            "sentiment": "negative",
+        },
+        {"sentence_id": 0, "review": "Good value.", "aspect": "value", "sentiment": "positive"},
+    ]
+    ids = [example.example_id for example in build_pair_dataset(records)]
+    assert ids == ["7_0", "7_1", "0_0"]
+
+
+def test_dataset_falls_back_to_position_without_ids() -> None:
+    records = [
+        {"review": "Good value.", "aspect": "value", "sentiment": "positive"},
+        {"review": "Poor build.", "aspect": "build", "sentiment": "negative"},
+    ]
+    assert [e.example_id for e in build_pair_dataset(records)] == ["0_0", "1_0"]
+
+
+def test_reduced_labels_change_ids_and_reject_dropped_label() -> None:
+    labels = ("positive", "negative", "neutral")
+    record = {"review": "Fine.", "aspect": "Fine", "sentiment": "neutral"}
+    assert build_pair_example(record, labels=labels).label == 2
+    conflict = {"review": "Fine.", "aspect": "Fine", "sentiment": "conflict"}
+    with pytest.raises(ValueError, match="unknown sentiment"):
+        build_pair_example(conflict, labels=labels)
+    with pytest.raises(ValueError, match="unknown sentiment"):
+        build_pair_dataset([conflict], labels=labels)
