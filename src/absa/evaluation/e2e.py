@@ -56,28 +56,33 @@ def evaluate_given_aspect_classification(
     labels: Sequence[str] = SENTIMENT_LABELS,
 ) -> ClassificationMetrics:
     """Compute accuracy, macro F1, and per-class precision/recall/F1 for sentiment labels."""
-    if not gold_labels or len(gold_labels) != len(pred_labels):
-        return ClassificationMetrics(accuracy=0.0, macro_f1=0.0, per_class={})
+    if not gold_labels:
+        raise ValueError("gold_labels must not be empty")
+    if len(gold_labels) != len(pred_labels):
+        raise ValueError(
+            f"gold and predicted labels must have the same length: "
+            f"{len(gold_labels)} != {len(pred_labels)}"
+        )
 
-    correct = sum(1 for g, p in zip(gold_labels, pred_labels, strict=False) if g == p)
+    correct = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == p)
     accuracy = correct / len(gold_labels)
 
     per_class: dict[str, dict[str, float]] = {}
     f1_scores: list[float] = []
 
     for lbl in labels:
-        tp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=False) if g == lbl and p == lbl)
-        fp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=False) if g != lbl and p == lbl)
-        fn = sum(1 for g, p in zip(gold_labels, pred_labels, strict=False) if g == lbl and p != lbl)
+        tp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == lbl and p == lbl)
+        fp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g != lbl and p == lbl)
+        fn = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == lbl and p != lbl)
 
         prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
 
         per_class[lbl] = {
-            "precision": round(prec, 4),
-            "recall": round(rec, 4),
-            "f1": round(f1, 4),
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
         }
         if (tp + fn) > 0:
             f1_scores.append(f1)
@@ -85,8 +90,8 @@ def evaluate_given_aspect_classification(
     macro_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0.0
 
     return ClassificationMetrics(
-        accuracy=round(accuracy, 4),
-        macro_f1=round(macro_f1, 4),
+        accuracy=accuracy,
+        macro_f1=macro_f1,
         per_class=per_class,
     )
 
@@ -96,11 +101,16 @@ def evaluate_end_to_end(
     pred_pairs_list: Sequence[Sequence[AspectSentimentPair]],
 ) -> EndToEndMetrics:
     """Evaluate end-to-end ABSA requiring both span offsets and sentiment to match exactly."""
+    if len(gold_pairs_list) != len(pred_pairs_list):
+        raise ValueError(
+            "gold and predicted pair lists must have the same number of sentences: "
+            f"{len(gold_pairs_list)} != {len(pred_pairs_list)}"
+        )
     total_tp = 0
     total_fp = 0
     total_fn = 0
 
-    for gold_pairs, pred_pairs in zip(gold_pairs_list, pred_pairs_list, strict=False):
+    for gold_pairs, pred_pairs in zip(gold_pairs_list, pred_pairs_list, strict=True):
         matched_gold: set[int] = set()
         tp = 0
 
@@ -124,9 +134,9 @@ def evaluate_end_to_end(
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
 
     return EndToEndMetrics(
-        precision=round(precision, 4),
-        recall=round(recall, 4),
-        f1=round(f1, 4),
+        precision=precision,
+        recall=recall,
+        f1=f1,
         tp=total_tp,
         fp=total_fp,
         fn=total_fn,
