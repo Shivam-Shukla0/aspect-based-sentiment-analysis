@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import io
+import json
+import urllib.error
+import urllib.request
+from types import TracebackType
+from typing import Any
+
 import pytest
 
 from absa.models.llm import (
@@ -59,3 +66,84 @@ def test_parse_llm_json_empty_array() -> None:
 def test_parse_llm_json_malformed() -> None:
     with pytest.raises(ValueError, match="Could not parse valid JSON array"):
         parse_llm_json("I cannot identify any aspects in this review.")
+
+
+class _FakeResponse:
+    """Minimal context-manager stand-in for an HTTP response."""
+
+    def __init__(self, body: bytes) -> None:
+        self._body = io.BytesIO(body)
+
+    def read(self) -> bytes:
+        return self._body.read()
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        return None
+
+
+def test_http_client_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+    monkeypatch.setenv("LLM_API_KEY", "secret")
+    monkeypatch.setenv("LLM_API_BASE", "http://example.test/v1/")
+    client = HttpLLMClient()
+    assert client.model == "test-model"
+    assert client.api_key == "secret"
+    assert client.api_base == "http://example.test/v1"
+
+
+def test_http_client_generate_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: float) -> _FakeResponse:
+        captured["url"] = req.full_url
+        captured["timeout"] = timeout
+        captured["auth"] = req.get_header("Authorization")
+        captured["payload"] = json.loads(req.data.decode("utf-8"))  # type: ignore[union-attr]
+        body = {"choices": [{"message": {"content": "[]"}}]}
+        return _FakeResponse(json.dumps(body).encode("utf-8"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = HttpLLMClient(model="m", api_key="k", api_base="http://example.test/v1", timeout=5.0)
+    assert client.generate("hello") == "[]"
+    assert captured["url"] == "http://example.test/v1/chat/completions"
+    assert captured["timeout"] == 5.0
+    assert captured["auth"] == "Bearer k"
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hello"}]
+
+
+def test_http_client_generate_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(*_args: object, **_kwargs: object) -> _FakeResponse:
+        raise urllib.error.URLError("boom")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = HttpLLMClient(api_key="k", api_base="http://example.test")
+    with pytest.raises(RuntimeError, match="HTTP LLM generation failed"):
+        client.generate("hello")
+
+
+def test_parse_llm_json_embedded_array_without_fence() -> None:
+    raw = 'Sure! [{"aspect": "price", "sentiment": "Negative "}] Hope this helps.'
+    assert parse_llm_json(raw) == [{"aspect": "price", "sentiment": "negative"}]
+
+
+def test_parse_llm_json_skips_invalid_items() -> None:
+    raw = '[{"aspect": "a"}, "text", {"aspect": "b", "sentiment": "positive"}]'
+    assert parse_llm_json(raw) == [{"aspect": "b", "sentiment": "positive"}]
+
+
+def test_parse_llm_json_invalid_json_inside_brackets() -> None:
+    with pytest.raises(ValueError, match="Could not parse valid JSON array"):
+        parse_llm_json("[{aspect: broken}]")
+
+
+def test_parse_llm_json_invalid_json_in_fence() -> None:
+    with pytest.raises(ValueError, match="Could not parse valid JSON array"):
+        parse_llm_json('```json\n[{"aspect": "x", "sentiment": "positive"} 5]\n```')
