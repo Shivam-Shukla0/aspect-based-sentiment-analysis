@@ -91,13 +91,21 @@ def evaluate_extraction_spans(
         exact_match: If True, requires exact boundary match.
 
     Returns:
-        ExtractionMetrics containing precision, recall, and F1.
+        ExtractionMetrics containing precision, recall, and F1 (unrounded).
+
+    Raises:
+        ValueError: If the two lists do not cover the same number of sentences.
     """
+    if len(gold_spans_list) != len(pred_spans_list):
+        raise ValueError(
+            "gold and predicted span lists must have the same number of sentences: "
+            f"{len(gold_spans_list)} != {len(pred_spans_list)}"
+        )
     total_tp = 0
     total_fp = 0
     total_fn = 0
 
-    for gold, pred in zip(gold_spans_list, pred_spans_list, strict=False):
+    for gold, pred in zip(gold_spans_list, pred_spans_list, strict=True):
         tp, fp, fn = compute_span_counts(gold, pred, exact_match=exact_match)
         total_tp += tp
         total_fp += fp
@@ -110,9 +118,9 @@ def evaluate_extraction_spans(
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
 
     return ExtractionMetrics(
-        precision=round(precision, 4),
-        recall=round(recall, 4),
-        f1=round(f1, 4),
+        precision=precision,
+        recall=recall,
+        f1=f1,
         tp=total_tp,
         fp=total_fp,
         fn=total_fn,

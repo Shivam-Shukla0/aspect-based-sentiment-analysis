@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from absa.evaluation.extraction import (
     ExtractionMetrics,
     compute_span_counts,
@@ -43,8 +45,8 @@ def test_evaluate_extraction_spans() -> None:
     assert metrics.fp == 0
     assert metrics.fn == 1
     assert metrics.precision == 1.0
-    assert metrics.recall == round(2 / 3, 4)
-    assert metrics.f1 == round((2 * 1.0 * (2 / 3)) / (1.0 + 2 / 3), 4)
+    assert metrics.recall == pytest.approx(2 / 3)
+    assert metrics.f1 == pytest.approx((2 * 1.0 * (2 / 3)) / (1.0 + 2 / 3))
     assert metrics.to_dict()["tp"] == 2
 
 
@@ -53,6 +55,11 @@ def test_evaluate_extraction_spans_empty() -> None:
     assert metrics.precision == 0.0
     assert metrics.recall == 0.0
     assert metrics.f1 == 0.0
+
+
+def test_mismatched_sentence_counts_are_rejected() -> None:
+    with pytest.raises(ValueError, match="same number of sentences"):
+        evaluate_extraction_spans([[(0, 4)], [(5, 9)]], [[(0, 4)]])
 
 
 def test_overlap_matching_is_greedy_in_prediction_order() -> None:
