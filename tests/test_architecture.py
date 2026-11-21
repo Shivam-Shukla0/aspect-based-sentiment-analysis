@@ -23,10 +23,11 @@ ENTRY_MODULES = frozenset({"__init__", "__main__"})
 # Keep this in sync with the table in docs/architecture.md (a test compares them).
 ALLOWED: dict[str, frozenset[str]] = {
     "config": frozenset(),
+    "_lazy": frozenset(),
     "reproducibility": frozenset({"config"}),
-    "data": frozenset({"config", "reproducibility"}),
-    "models": frozenset({"config", "data", "reproducibility"}),
-    "extraction": frozenset({"config", "data", "reproducibility"}),
+    "data": frozenset({"config", "reproducibility", "_lazy"}),
+    "models": frozenset({"config", "data", "evaluation", "reproducibility", "_lazy"}),
+    "extraction": frozenset({"config", "data", "reproducibility", "_lazy"}),
     "evaluation": frozenset({"config", "data"}),
     "inference": frozenset({"config", "data", "models", "extraction"}),
 }
@@ -168,6 +169,7 @@ def test_document_lists_the_same_rules() -> None:
     ("source", "expected"),
     [
         ("from absa.models import lstm_attention", ["data may not"]),
+        ("from absa._lazy import lazy_getattr\nfrom absa.config import RANDOM_SEED", []),
         ("import absa.extraction.llm", ["data may not"]),
         ("from absa import inference", ["data may not"]),
         ("def f():\n    from absa.inference import predict", ["data may not"]),
