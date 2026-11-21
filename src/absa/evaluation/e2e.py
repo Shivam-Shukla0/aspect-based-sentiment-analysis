@@ -95,7 +95,10 @@ def evaluate_end_to_end(
     gold_pairs_list: Sequence[Sequence[AspectSentimentPair]],
     pred_pairs_list: Sequence[Sequence[AspectSentimentPair]],
 ) -> EndToEndMetrics:
-    """Evaluate end-to-end ABSA requiring both span offsets and sentiment to match exactly."""
+    """Evaluate end-to-end ABSA: span offsets and sentiment label must both match exactly.
+
+    Labels are compared exactly (no case folding), like in ``evaluate_given_aspect_classification``.
+    """
     total_tp = 0
     total_fp = 0
     total_fn = 0
@@ -108,7 +111,7 @@ def evaluate_end_to_end(
             for g_idx, (g_start, g_end, g_sent) in enumerate(gold_pairs):
                 if g_idx in matched_gold:
                     continue
-                if p_start == g_start and p_end == g_end and p_sent.lower() == g_sent.lower():
+                if p_start == g_start and p_end == g_end and p_sent == g_sent:
                     matched_gold.add(g_idx)
                     tp += 1
                     break
