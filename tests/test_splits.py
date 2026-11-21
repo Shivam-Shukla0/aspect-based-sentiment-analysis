@@ -71,7 +71,12 @@ def test_sentences_with_identical_text_stay_on_one_side() -> None:
     for index in range(30):
         review = "Great screen." if index < 2 else f"Unique sentence {index}."
         records.append(
-            {"review": review, "aspect": "screen", "sentiment": "positive", "sentence_id": str(index)}
+            {
+                "review": review,
+                "aspect": "screen",
+                "sentiment": "positive",
+                "sentence_id": str(index),
+            }
         )
     for seed in range(20):
         train, val = split_train_val(records, val_fraction=0.2, seed=seed)
