@@ -125,12 +125,16 @@ def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:
 
     Raises:
         ValueError: If any item is not an object with both an ``aspect`` and a
-            ``sentiment`` key. Dropping such items silently would look like "no aspects".
+            ``sentiment`` key, or if either value is null. Dropping such items silently
+            would look like "no aspects", and ``str(None)`` would turn null into ``"None"``.
     """
     parsed: list[dict[str, str]] = []
     for item in items:
         if not isinstance(item, dict) or "aspect" not in item or "sentiment" not in item:
             raise ValueError(f"item must be an object with 'aspect' and 'sentiment': {item!r}")
+        for field in ("aspect", "sentiment"):
+            if item[field] is None:
+                raise ValueError(f"'{field}' must not be null: {item!r}")
         parsed.append(
             {
                 "aspect": str(item["aspect"]),
@@ -164,7 +168,11 @@ def parse_llm_json(response: str) -> list[dict[str, str]]:
 
     The array may be surrounded by prose or a Markdown code fence, and ``[]`` is a valid
     answer meaning that no aspects were found. A single JSON object that is not inside an
-    array is rejected.
+    array is rejected. An empty or whitespace-only response is an error, not "no aspects",
+    so the caller can retry.
+
+    When several JSON arrays appear in the response, the first one wins: ``"[] then
+    [{...}]"`` returns ``[]``.
 
     Args:
         response: Raw string completion from the language model.
@@ -173,12 +181,12 @@ def parse_llm_json(response: str) -> list[dict[str, str]]:
         List of parsed aspect-sentiment dictionaries.
 
     Raises:
-        ValueError: If no JSON array can be found, or an item lacks ``aspect`` or
-            ``sentiment``.
+        ValueError: If the response is empty or whitespace-only, no JSON array can be
+            found, an item lacks ``aspect`` or ``sentiment``, or either of them is null.
     """
     cleaned = response.strip()
     if not cleaned:
-        return []
+        raise ValueError("Empty response from the language model")
 
     items = _find_json_array(cleaned)
     if items is None:
