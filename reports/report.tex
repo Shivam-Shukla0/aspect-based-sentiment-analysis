@@ -1,0 +1,215 @@
+% Compile with the journal class nle.cls placed next to this file:
+%   pdflatex report.tex (run twice).
+% The class file is supplied by the publisher and is not part of this repository.
+\documentclass{nle}
+
+\title[Aspect-based sentiment analysis of product reviews]{Aspect-based sentiment analysis of product reviews:\\ an LSTM with aspect attention versus a fine-tuned BERT sentence-pair classifier}
+
+\author[S. Shukla and others]
+       {S\ls H\ls I\ls V\ls A\ls M\ns S\ls H\ls U\ls K\ls L\ls A\\
+        Course project (institution to be completed)
+        \and
+        N\ls I\ls K\ls H\ls I\ls L\ns C\ls H\ls A\ls U\ls R\ls A\ls S\ls I\ls Y\ls A\\
+        Course project (institution to be completed)
+        \and
+        R\ls A\ls J\ls E\ls E\ls V\ns Y\ls A\ls D\ls A\ls V\\
+        Course project (institution to be completed)}
+
+\received{21 November 2026}
+\pagerange{\pageref{firstpage}--\pageref{lastpage}}
+\pubyear{2026}
+
+\begin{document}
+
+\label{firstpage}
+\maketitle
+
+\begin{abstract}
+Aspect-based sentiment analysis (ABSA) predicts the sentiment a review expresses towards each aspect it mentions, instead of one label for the whole text. We study the given-aspect setting on the SemEval-2014 Task~4 laptop and restaurant data. We compare two models under one evaluation protocol: a bidirectional LSTM whose attention is driven by the aspect, and a BERT model fine-tuned on (review, aspect) sentence pairs. Hyperparameters are chosen on a validation split of the training data, and the official test file is scored once. The usual protocol is followed and the rare \textit{conflict} label is dropped. The BERT model reaches 0.765 accuracy and 0.715 macro F1 on laptops and 0.835 accuracy and 0.740 macro F1 on restaurants. The LSTM, trained from randomly initialised word vectors, reaches 0.578 and 0.501 on laptops and 0.710 and 0.589 on restaurants, which is only a few points above always predicting the majority class. Both models find the neutral class hardest. We describe the data, the models, the protocol and the errors, and we state the limits of these results. They come from one training run per setting, and the language-model prompting approach planned in the project is not evaluated here.
+\end{abstract}
+
+\section{Introduction}
+
+A review such as ``the battery is weak but the screen is excellent'' has no single sentiment. A document-level classifier must call it mixed, whereas an aspect-level system reports \textit{negative} for the battery and \textit{positive} for the screen. ABSA aims at the second, more useful, output \cite{pontiki2014}.
+
+ABSA is usually split into subtasks: extracting the aspect terms, and classifying the sentiment towards a term that is already known. This report concerns the second subtask, which we call \textit{given-aspect classification}. A complete system also needs an extractor; ours is out of scope here and is discussed in Section~\ref{sec:limits}.
+
+Our contributions are modest and practical. We implement two models with very different cost, evaluate them under a single protocol that never uses the test set for any choice, and report per-class results and an error analysis. We also describe what the numbers can and cannot support.
+
+\section{Related work}
+
+Early ABSA systems used hand-built features with support vector machines and obtained strong results in the SemEval-2014 evaluation \cite{pontiki2014}. Recurrent networks then replaced the features. Wang \textit{et al.}\ \shortcite{wang2016} combined an LSTM with an attention mechanism driven by the aspect, which lets the model weight the review words that matter for that aspect. Our first model follows this design in a simplified form.
+
+Pre-trained transformers changed the picture. Devlin \textit{et al.}\ \shortcite{devlin2019} introduced BERT, which is trained on large amounts of text and can be fine-tuned with a small output layer. For ABSA, Sun \textit{et al.}\ \shortcite{sun2019} showed that turning the task into sentence-pair classification, with the review as the first sentence and the aspect as the second, works well. Our second model uses that formulation.
+
+\section{Data}
+
+We use SemEval-2014 Task~4 \cite{pontiki2014}, which has laptop and restaurant reviews with aspect-term annotations and a polarity for each term: \textit{positive}, \textit{negative}, \textit{neutral} or \textit{conflict}. The XML files are parsed so that each (sentence, aspect term) pair becomes one record. Sentences without an aspect term are kept in separate files and are not used for training. Character offsets in the annotation satisfy \texttt{text[from:to] == term}, which the parser checks for every term.
+
+Table~\ref{tab:data} gives the sizes. Following the usual protocol, the \textit{conflict} label is removed, which leaves the three polarity classes. It is rare (45 of 2,358 laptop training records) and models cannot learn it from so few examples. The distributions are skewed towards \textit{positive}: it is 53\% of the laptop test records and 65\% of the restaurant ones, so always predicting \textit{positive} already scores about 0.53 and 0.65 in accuracy.
+
+\begin{table}
+\caption{Aspect-term records. Test counts exclude the \textit{conflict} label; the training counts are before it is removed.}
+\label{tab:data}
+\begin{minipage}{\textwidth}
+\begin{tabular}{lrrrr}
+\hline\hline
+Domain & Train & Test & Positive (test) & Majority accuracy\\
+\hline
+Laptop & 2,358 & 638 & 341 & 0\hpt 534\\
+Restaurant & 3,693 & 1,120 & 728 & 0\hpt 650\\
+\hline\hline
+\end{tabular}
+\vspace{-2\baselineskip}
+\end{minipage}
+\end{table}
+
+\textit{Provenance.} The official files are distributed through the ILSP Metashare repository, which requires registration and acceptance of a licence. For this study the four XML files were obtained from a public mirror on the Hugging Face Hub, because the Metashare route was not available to us in time. Their sizes match the official files (laptop training 687,312 bytes, restaurant training 1,235,614, laptop test 178,754 and restaurant test 359,021), and the record counts match the published figures, but we could not check them against an official checksum and the licence of the mirror is not stated. The files are not part of our repository. The results should be rerun on files obtained through Metashare before they are quoted elsewhere.
+
+\section{Models}
+
+\subsection{LSTM with aspect attention}
+
+Review and aspect are lower-cased and split into word and punctuation tokens. A vocabulary is built from the training reviews only. Token embeddings (100 dimensions, randomly initialised) feed a bidirectional LSTM. The aspect, whose tokens go through the same embedding and LSTM, is summarised by the mean of its hidden states. A learned linear map of that summary is compared with every review hidden state by a dot product, padding is masked before the softmax, and the attention-weighted sum of the review states is classified by a linear layer.
+
+We regularise with dropout on the embeddings, which proved important: without it the validation score peaked after a few epochs. Training uses Adam with cross-entropy, batches of 32, and keeps the weights of the epoch with the best validation macro F1.
+
+\subsection{BERT sentence-pair classifier}
+
+We fine-tune \texttt{bert-base-uncased} \cite{devlin2019}. The input is \texttt{[CLS] review [SEP] aspect [SEP]} and a classification layer on the pooled \texttt{[CLS]} representation gives three outputs. Training uses AdamW (weight decay 0.01), a linear schedule with 10\% warm-up, gradient clipping at 1.0, four epochs, batches of 32, sequences truncated to 128 tokens, and bfloat16 mixed precision on a GPU. The weights of the epoch with the best validation macro F1 are kept.
+
+\section{Evaluation protocol}
+
+For each domain, 20\% of the training sentences are held out as a validation split. Records are grouped by their normalised review text, so two records of one sentence, or two sentences with identical text, never fall on both sides of a split. All choices (learning rate, dropout, the epoch to keep) use validation macro F1 only. The official test file is read once, after the setting is chosen. We report accuracy and macro F1 over the three classes, together with per-class precision, recall and F1 and a confusion matrix. Every random number generator is seeded with 42. Both models run on one NVIDIA A100 GPU.
+
+For the LSTM we searched dropout in $\{0, 0.3, 0.5\}$ and learning rate in $\{0.001, 0.003\}$ with hidden size 128 and up to 40 epochs. For BERT we searched the learning rate in $\{2, 3, 5\}\times10^{-5}$.
+
+\section{Results}
+
+\begin{table}
+\caption{Official test results, with the \textit{conflict} label dropped. The setting was chosen on validation data only. Accuracy of always predicting \textit{positive} is 0.534 (laptop) and 0.650 (restaurant).}
+\label{tab:results}
+\begin{minipage}{\textwidth}
+\begin{tabular}{llrr}
+\hline\hline
+Domain & Model & Accuracy & Macro F1\\
+\hline
+Laptop & LSTM with aspect attention & 0\hpt 578 & 0\hpt 501\\
+Laptop & BERT sentence pair & 0\hpt 765 & 0\hpt 715\\
+Restaurant & LSTM with aspect attention & 0\hpt 710 & 0\hpt 589\\
+Restaurant & BERT sentence pair & 0\hpt 835 & 0\hpt 740\\
+\hline\hline
+\end{tabular}
+\vspace{-2\baselineskip}
+\end{minipage}
+\end{table}
+
+Table~\ref{tab:results} shows that BERT is much better than the LSTM in both domains: about 19 points of accuracy on laptops and 12 on restaurants. The LSTM is only 4 points above the majority baseline on laptops and 6 on restaurants, so we do not regard it as a useful classifier. This is expected for a model whose word vectors start from random values and which sees fewer than 4,000 training records, whereas BERT starts from a representation of language learned from large corpora.
+
+\begin{table}
+\caption{Per-class precision (P), recall (R) and F1 on the test set; support in the last column.}
+\label{tab:perclass}
+\begin{minipage}{\textwidth}
+\begin{tabular}{llcccr}
+\hline\hline
+Domain & Class (BERT) & P & R & F1 & Support\\
+\hline
+Laptop & positive & 0\hpt 894 & 0\hpt 868 & 0\hpt 881 & 341\\
+Laptop & negative & 0\hpt 587 & 0\hpt 867 & 0\hpt 700 & 128\\
+Laptop & neutral & 0\hpt 686 & 0\hpt 479 & 0\hpt 564 & 169\\
+Restaurant & positive & 0\hpt 870 & 0\hpt 960 & 0\hpt 913 & 728\\
+Restaurant & negative & 0\hpt 755 & 0\hpt 770 & 0\hpt 763 & 196\\
+Restaurant & neutral & 0\hpt 726 & 0\hpt 434 & 0\hpt 543 & 196\\
+\hline\hline
+\end{tabular}
+\vspace{-2\baselineskip}
+\end{minipage}
+\end{table}
+
+Table~\ref{tab:perclass} shows the per-class behaviour of BERT. \textit{Positive} is easy. \textit{Neutral} is hardest in both domains, with a recall below 0.5.
+
+\subsection{Learning rate and validation}
+
+On the validation split BERT preferred the largest learning rate in both domains (laptop macro F1 0.707, 0.712 and 0.754 for $2$, $3$ and $5\times10^{-5}$; restaurant 0.680, 0.708 and 0.711). The best value is at the edge of the grid, so a larger search could do slightly better. For the LSTM, dropout of 0.5 gave the best validation score in both domains (0.598 on laptops and 0.608 on restaurants), against 0.569 and 0.591 for the best setting without dropout, and the chosen runs peaked at epochs 36 and 37 of 40, which shows that training had not converged.
+
+\section{Error analysis}
+
+BERT makes 150 errors on the 638 laptop records and 185 on the 1,120 restaurant records. Table~\ref{tab:errors} lists them by type.
+
+\begin{table}
+\caption{BERT errors by (true $\rightarrow$ predicted) pair.}
+\label{tab:errors}
+\begin{minipage}{\textwidth}
+\begin{tabular}{lrr}
+\hline\hline
+Error & Laptop & Restaurant\\
+\hline
+neutral $\rightarrow$ positive & 31 & 78\\
+neutral $\rightarrow$ negative & 57 & 33\\
+positive $\rightarrow$ neutral & 24 & 13\\
+positive $\rightarrow$ negative & 21 & 16\\
+negative $\rightarrow$ neutral & 13 & 19\\
+negative $\rightarrow$ positive & 4 & 26\\
+\hline
+Total & 150 & 185\\
+\hline\hline
+\end{tabular}
+\vspace{-2\baselineskip}
+\end{minipage}
+\end{table}
+
+Most errors involve the neutral class: 88 of 150 on laptops and 111 of 185 on restaurants start from a true \textit{neutral} record. The direction differs between domains. In laptop reviews a neutral term is most often read as \textit{negative} (57 cases), plausibly because laptop reviews frequently describe a feature neutrally while complaining about the product around it. In restaurant reviews a neutral term is most often read as \textit{positive} (78 cases), which matches the strong positive majority of that domain. We have not studied individual sentences systematically, and these explanations are hypotheses, not findings.
+
+The LSTM shows the same pattern in a stronger form. On laptops its recall for \textit{neutral} is 0.172 and for \textit{negative} it is high at 0.820 with a precision of only 0.358, so it over-predicts the negative class. On restaurants its \textit{neutral} F1 is 0.400.
+
+\section{Limitations}
+\label{sec:limits}
+
+\begin{itemize}
+\item \textbf{One run per setting.} Each number is a single run with one seed. We did not measure run-to-run variation, and the differences between nearby settings (for example the two best BERT learning rates) are within what a different seed could change. The gap between BERT and the LSTM is large enough that we expect it to remain.
+\item \textbf{Data provenance.} The data came from an unofficial mirror (Section~3), so the figures should be repeated on files obtained through the official channel.
+\item \textbf{Given-aspect only.} The models need the aspect term as input. A full system also needs aspect extraction. The BIO-tagging data preparation exists in the project, but an extractor was not trained, so no end-to-end figure is reported.
+\item \textbf{Language-model prompting not evaluated.} The project planned a third approach that prompts a language model to extract aspects and sentiments. The prompts, the output parser and the validation code were written, but the approach was not run against the benchmark because no model access was set up. It is therefore not compared here.
+\item \textbf{The LSTM baseline is weak.} It uses random word vectors. Pre-trained vectors would probably help, but we did not test this.
+\item \textbf{The conflict label is dropped}, so the models cannot predict it, and the results are not comparable with work that keeps it.
+\item \textbf{Limited search.} The BERT learning-rate grid has three values and its best value lies on the boundary.
+\end{itemize}
+
+\section{Conclusion}
+
+Under a protocol that never uses the test set for a choice, a fine-tuned BERT sentence-pair classifier clearly outperforms an LSTM with aspect attention trained from scratch on SemEval-2014 given-aspect sentiment classification: 0.765 against 0.578 accuracy on laptops and 0.835 against 0.710 on restaurants. The LSTM is barely above the majority-class baseline. Both models find the neutral class hardest. The most useful next steps are rerunning the study on official files with several seeds, adding pre-trained embeddings to the LSTM, training the aspect extractor, and evaluating the language-model approach.
+
+\section*{Reproducibility}
+
+The code, the training scripts and the tests are in the project repository. The scripts \texttt{scripts/train\_lstm.py} and \texttt{scripts/train\_bert.py} tune on the validation split and write \texttt{summary.json} and \texttt{test\_report.json}, from which every number above was taken. Training ran on a Google Colab NVIDIA A100 GPU. The environment of each run can be recorded with \texttt{scripts/verify\_environment.py}.
+
+\begin{thebibliography}{}
+  \bibitem[\protect\citename{Devlin {\it et al.}\ }2019]{devlin2019}
+   Devlin, J., Chang, M.-W., Lee, K. and Toutanova, K. (2019) BERT:
+   pre-training of deep bidirectional transformers for language
+   understanding. In {\it Proceedings of the 2019 Conference of the
+   North American Chapter of the Association for Computational
+   Linguistics: Human Language Technologies}, pp.~4171--86.
+   Minneapolis, Minnesota.
+  \bibitem[\protect\citename{Pontiki {\it et al.}\ }2014]{pontiki2014}
+   Pontiki, M., Galanis, D., Pavlopoulos, J., Papageorgiou, H.,
+   Androutsopoulos, I. and Manandhar, S. (2014) SemEval-2014 Task 4:
+   aspect based sentiment analysis. In {\it Proceedings of the 8th
+   International Workshop on Semantic Evaluation (SemEval 2014)},
+   pp.~27--35. Dublin, Ireland.
+  \bibitem[\protect\citename{Sun {\it et al.}\ }2019]{sun2019}
+   Sun, C., Huang, L. and Qiu, X. (2019) Utilizing BERT for
+   aspect-based sentiment analysis via constructing auxiliary
+   sentence. In {\it Proceedings of the 2019 Conference of the North
+   American Chapter of the Association for Computational Linguistics:
+   Human Language Technologies}, pp.~380--85. Minneapolis, Minnesota.
+  \bibitem[\protect\citename{Wang {\it et al.}\ }2016]{wang2016}
+   Wang, Y., Huang, M., Zhu, X. and Zhao, L. (2016) Attention-based
+   LSTM for aspect-level sentiment classification. In {\it Proceedings
+   of the 2016 Conference on Empirical Methods in Natural Language
+   Processing}, pp.~606--15. Austin, Texas.
+\end{thebibliography}
+
+\label{lastpage}
+
+\end{document}
