@@ -124,7 +124,7 @@ def test_http_client_generate_url_error(monkeypatch: pytest.MonkeyPatch) -> None
         raise urllib.error.URLError("boom")
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    client = HttpLLMClient(api_key="k", api_base="http://example.test")
+    client = HttpLLMClient(model="m", api_key="k", api_base="http://example.test")
     with pytest.raises(RuntimeError, match="HTTP LLM generation failed"):
         client.generate("hello")
 
@@ -147,3 +147,12 @@ def test_parse_llm_json_invalid_json_inside_brackets() -> None:
 def test_parse_llm_json_invalid_json_in_fence() -> None:
     with pytest.raises(ValueError, match="Could not parse valid JSON array"):
         parse_llm_json('```json\n[{"aspect": "x", "sentiment": "positive"} 5]\n```')
+
+
+def test_http_client_requires_model_and_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("LLM_MODEL", "LLM_API_KEY", "LLM_API_BASE"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError, match="LLM_MODEL"):
+        HttpLLMClient(api_key="k", api_base="http://example.test").generate("hi")
+    with pytest.raises(ValueError, match="LLM_API_BASE"):
+        HttpLLMClient(api_key="k", model="m").generate("hi")

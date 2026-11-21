@@ -48,10 +48,14 @@ class HttpLLMClient:
         api_base: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        """Initialize HTTP client configuration."""
-        self.model: str = model or os.getenv("LLM_MODEL") or "gpt-3.5-turbo"
+        """Initialize HTTP client configuration.
+
+        Model, API key and base URL have no vendor defaults: pass them explicitly or set
+        ``LLM_MODEL``, ``LLM_API_KEY`` and ``LLM_API_BASE``.
+        """
+        self.model: str = model or os.getenv("LLM_MODEL") or ""
         self.api_key: str = api_key or os.getenv("LLM_API_KEY") or ""
-        base = api_base or os.getenv("LLM_API_BASE") or "https://api.openai.com/v1"
+        base = api_base or os.getenv("LLM_API_BASE") or ""
         self.api_base: str = base.rstrip("/")
         self.timeout: float = timeout
 
@@ -59,6 +63,10 @@ class HttpLLMClient:
         """Invoke API endpoint and return text content."""
         if not self.api_key:
             raise ValueError("LLM_API_KEY environment variable is not configured")
+        if not self.model:
+            raise ValueError("LLM_MODEL environment variable is not configured")
+        if not self.api_base:
+            raise ValueError("LLM_API_BASE environment variable is not configured")
 
         url = f"{self.api_base}/chat/completions"
         headers = {
