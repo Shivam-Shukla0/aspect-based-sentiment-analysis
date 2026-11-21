@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from absa.config import SENTIMENT_LABELS
+from absa.models.llm_errors import LLMClientError
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ class ValidationReport:
     total_candidates: int = 0
     valid_count: int = 0
     invalid_count: int = 0
-    retries_used: int = 0
+    retries_used: int = 0  # retries performed after a failed attempt
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -40,20 +42,19 @@ class ValidationReport:
         return self.invalid_count == 0
 
 
-def _find_unused(review: str, aspect: str, used: set[int]) -> int:
-    """Return the first occurrence of ``aspect`` in ``review`` not claimed yet, or -1.
+def _find_unused(review: str, aspect: str, used: set[int]) -> tuple[int, int] | None:
+    """Return the span of the first occurrence of ``aspect`` in ``review`` not claimed yet.
 
-    An exact match is preferred; if there is none, a case-insensitive match is used.
-    Starting positions already in ``used`` are skipped, so an aspect that is mentioned
-    twice maps to two different spans instead of the first one twice.
+    An exact match is preferred; if there is none, a case-insensitive match is used. The
+    search runs on the original review (not on a lower-cased copy, whose length can differ),
+    so the returned offsets always index into ``review``. Starting positions already in
+    ``used`` are skipped, so an aspect that is mentioned twice maps to two different spans.
     """
-    for text, needle in ((review, aspect), (review.lower(), aspect.lower())):
-        start = text.find(needle)
-        while start != -1:
-            if start not in used:
-                return start
-            start = text.find(needle, start + 1)
-    return -1
+    for flags in (0, re.IGNORECASE):
+        for match in re.finditer(re.escape(aspect), review, flags):
+            if match.start() not in used:
+                return match.start(), match.end()
+    return None
 
 
 def validate_aspect_predictions(
@@ -70,6 +71,13 @@ def validate_aspect_predictions(
 
     Returns:
         List of validated and offset-aligned ValidatedAspect objects.
+
+    Note:
+        Repeated mentions of one aspect are assigned to successive occurrences in the order
+        the model listed them, which is only the text order if the model followed it. The
+        prompt should therefore ask for aspects in order of appearance. Nested aspects such
+        as "battery" and "battery life" both start at the same position, so only the first
+        one listed is kept.
     """
     rep = report if report is not None else ValidationReport()
     validated: list[ValidatedAspect] = []
@@ -90,13 +98,13 @@ def validate_aspect_predictions(
             rep.errors.append(f"Invalid sentiment label: {sentiment!r}")
             continue
 
-        start = _find_unused(review, aspect, used)
-        if start == -1:
+        span = _find_unused(review, aspect, used)
+        if span is None:
             rep.invalid_count += 1
             rep.errors.append(f"Aspect {aspect!r} not found in review text")
             continue
 
-        end = start + len(aspect)
+        start, end = span
         used.add(start)
         validated.append(
             ValidatedAspect(aspect=review[start:end], sentiment=sentiment, start=start, end=end)
@@ -106,7 +114,7 @@ def validate_aspect_predictions(
     return validated
 
 
-TRANSIENT_ERRORS: tuple[type[Exception], ...] = (RuntimeError, OSError)
+TRANSIENT_ERRORS: tuple[type[Exception], ...] = (LLMClientError, OSError)
 
 
 def _attempt(
@@ -116,6 +124,8 @@ def _attempt(
     try:
         return generate_fn(), None
     except retry_on as err:
+        if isinstance(err, LLMClientError) and not err.retryable:
+            raise
         return None, err
 
 
@@ -127,10 +137,12 @@ def retry_llm_inference(
 ) -> list[dict[str, str]]:
     """Run ``generate_fn``, retrying only errors listed in ``retry_on``.
 
-    Network and service failures (``RuntimeError`` from the client, ``OSError`` and its
+    Network and service failures (``LLMClientError`` marked retryable, ``OSError`` and its
     subclasses such as ``ConnectionError`` and ``TimeoutError``) are retried up to
-    ``max_retries`` attempts in total. Any other exception, such as a parse error or a
-    programming mistake, is raised immediately, because repeating it cannot help.
+    ``max_retries`` attempts in total. Any other exception, such as a parse error, a rejected
+    request (``LLMClientError`` with ``retryable=False``), ``NotImplementedError`` or another
+    programming mistake, is raised immediately, because repeating it cannot help. There is
+    no delay between attempts. ``report.retries_used`` counts the retries actually made.
 
     Raises:
         ValueError: If ``max_retries`` is less than 1.
@@ -145,7 +157,8 @@ def retry_llm_inference(
         if result is not None:
             return result
         last_err = err
-        rep.retries_used += 1
+        if attempt < max_retries:
+            rep.retries_used += 1
         rep.errors.append(f"Attempt {attempt} failed: {err}")
     raise RuntimeError(
         f"LLM generation failed after {max_retries} attempts: {last_err}"
