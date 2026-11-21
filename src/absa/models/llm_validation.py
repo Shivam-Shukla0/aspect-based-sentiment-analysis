@@ -36,7 +36,7 @@ class ValidationReport:
 
     @property
     def is_successful(self) -> bool:
-        """Return True if at least one valid prediction exists or zero candidates were given."""
+        """Return True if no candidate was rejected (also True when there were no candidates)."""
         return self.invalid_count == 0
 
 
@@ -102,6 +102,8 @@ def retry_llm_inference(
     report: ValidationReport | None = None,
 ) -> list[dict[str, str]]:
     """Execute LLM generation function with bounded retries on failure."""
+    if max_retries < 1:
+        raise ValueError(f"max_retries must be at least 1, got {max_retries}")
     rep = report if report is not None else ValidationReport()
     last_err: Exception | None = None
 
