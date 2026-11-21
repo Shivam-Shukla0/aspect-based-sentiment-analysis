@@ -37,7 +37,8 @@ def check(
 
     Errors are missing or checksum-mismatched manifest entries. Warnings cover
     files present in ``raw_dir`` that are not listed in the manifest, so an
-    unexpected or renamed file is not silently ignored.
+    unexpected or renamed file is not silently ignored. Dotfiles such as the
+    tracked ``.gitkeep`` placeholder are skipped.
     """
     errors: list[str] = []
     warnings: list[str] = []
@@ -55,7 +56,7 @@ def check(
         warnings.extend(
             f"{path.name}: present in {raw_dir} but not in the manifest"
             for path in sorted(raw_dir.iterdir())
-            if path.is_file() and path.name not in manifest_names
+            if path.is_file() and not path.name.startswith(".") and path.name not in manifest_names
         )
 
     return errors, warnings

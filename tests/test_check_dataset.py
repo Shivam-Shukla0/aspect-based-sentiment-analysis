@@ -46,6 +46,21 @@ def test_check_warns_on_unmanifested_file(tmp_path: Path) -> None:
     assert "not in the manifest" in warnings[0]
 
 
+def test_check_ignores_dotfiles(tmp_path: Path) -> None:
+    (tmp_path / ".gitkeep").write_bytes(b"")
+    errors, warnings = check(raw_dir=tmp_path, manifest={})
+    assert errors == []
+    assert warnings == []
+
+
+def test_check_still_warns_on_real_file_next_to_dotfile(tmp_path: Path) -> None:
+    (tmp_path / ".gitkeep").write_bytes(b"")
+    (tmp_path / "extra.xml").write_bytes(b"not tracked")
+    _errors, warnings = check(raw_dir=tmp_path, manifest={})
+    assert len(warnings) == 1
+    assert "extra.xml" in warnings[0]
+
+
 def test_manifest_matches_readme_table() -> None:
     """The MANIFEST in check_dataset.py must mirror the checksums table in data/README.md."""
     readme = (Path(__file__).resolve().parents[1] / "data" / "README.md").read_text()
