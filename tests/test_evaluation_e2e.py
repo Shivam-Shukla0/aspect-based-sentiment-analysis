@@ -61,3 +61,8 @@ def test_evaluate_end_to_end_empty() -> None:
     assert metrics.precision == 0.0
     assert metrics.recall == 0.0
     assert metrics.f1 == 0.0
+
+
+def test_end_to_end_compares_sentiment_exactly() -> None:
+    metrics = evaluate_end_to_end([[(0, 5, "positive")]], [[(0, 5, "Positive")]])
+    assert (metrics.tp, metrics.fp, metrics.fn) == (0, 1, 1)
