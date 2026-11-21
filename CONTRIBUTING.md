@@ -46,7 +46,7 @@ Issues use three distinct label groups:
 ## Pull requests
 
 - Describe what changed, how it was validated (commands and real results) and what is not done.
-- Review rotation: at least two teammates review before merge, including a code owner.
+- Review requirements: at least two teammates review before merge, including a code owner. There is no fixed rotation; the author asks the owner of the area touched (see Shared contracts) and one other teammate.
 - Reviewers verify code correctness, test execution results, type hints, and that no results are claimed that were not produced.
 - Use the pull request template. The title must be `type(scope): subject`, the branch `<type>/<issue-number>-<name>`, every commit subject `type(scope): subject`, and the body needs `Closes #<issue>`.
 - The `Explanation` section must say, in your own words, how the change works, what you checked yourself, and what could break. Do not copy the summary.
@@ -54,6 +54,7 @@ Issues use three distinct label groups:
 - Approvals are dismissed automatically when new commits are pushed; all conversations must be marked resolved before merge.
 - The author who pushed the latest commit cannot approve their own pull request.
 - Keep PRs under 2000 changed lines. Split larger work.
+- Open issues with an issue form; title prefix and required sections are validated.
 
 ## Checks
 
