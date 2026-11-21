@@ -37,13 +37,20 @@ def test_sample_aspect_records(sample_aspect_records: list[dict[str, str]]) -> N
         assert record["aspect"] in str(validated["review"])
 
 
-@pytest.mark.slow
-def test_slow_marker_registration() -> None:
-    """Verify that slow marker is registered and does not raise unknown-marker error."""
-    assert True
+@pytest.mark.parametrize("fixture_name", ["synthetic_laptop_xml", "synthetic_restaurant_xml"])
+def test_fixture_offsets_match_terms(fixture_name: str, request: pytest.FixtureRequest) -> None:
+    root = ET.fromstring(request.getfixturevalue(fixture_name))  # noqa: S314
+    checked = 0
+    for sentence in root.findall("sentence"):
+        text = sentence.findtext("text") or ""
+        for term in sentence.findall("aspectTerms/aspectTerm"):
+            start, end = int(term.attrib["from"]), int(term.attrib["to"])
+            assert text[start:end] == term.attrib["term"]
+            checked += 1
+    assert checked > 0
 
 
-@pytest.mark.gpu
-def test_gpu_marker_registration() -> None:
-    """Verify that gpu marker is registered and does not raise unknown-marker error."""
-    assert True
+def test_slow_and_gpu_markers_are_registered(pytestconfig: pytest.Config) -> None:
+    markers = "\n".join(pytestconfig.getini("markers"))
+    assert "slow:" in markers
+    assert "gpu:" in markers
