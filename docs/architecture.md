@@ -19,7 +19,7 @@ reports/                   course report material
 review text
   -> absa.inference        combines models and extraction
   -> {"review": ..., "predictions": [{"aspect": ..., "sentiment": ...}]}
-  -> app/                  Flask backend and frontend (planned)
+  -> app/                  Flask backend and frontend
 ```
 
 The JSON shape is the output contract, not a model prediction. Classification with a supplied aspect and end-to-end extraction are different tasks and are evaluated separately.
@@ -75,7 +75,7 @@ absa.__main__, scripts/, app/, notebooks/
 | ------------ | -------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `src/absa/`  | The installable library: everything with logic that is tested.                               | per the table above                  |
 | `scripts/`   | Command line entry points for experiments (training, evaluation, benchmarks) and CI tooling. | any `absa` package                   |
-| `app/`       | Flask backend and static frontend. Planned; the directory does not exist yet.                | `inference`, `data`, `config`        |
+| `app/`       | Flask backend and static frontend (see [app/README.md](../app/README.md)).                   | `inference`, `data`, `config`        |
 | `notebooks/` | Exploration and Colab runs. No results yet.                                                  | public names from any `absa` package |
 | `tests/`     | Offline pytest suite using synthetic records.                                                | anything                             |
 | `data/`      | `raw/` and `processed/` are git-ignored. [data/README.md](../data/README.md) has the schema. | not code                             |
@@ -85,7 +85,7 @@ absa.__main__, scripts/, app/, notebooks/
 Decisions recorded here:
 
 - **Experiment entry points live in `scripts/`.** They stay thin: parse arguments, call `absa`, write to `outputs/`. They run from the repository root, for example `python -m scripts.<name>`, and are not part of the wheel or the Docker image.
-- **The web application lives in `app/`**, outside the package, so the library and the Docker image stay free of web dependencies. It talks to the models only through `absa.inference`. Flask is added to the requirements when the app is added.
+- **The web application lives in `app/`**, outside the package, so the library and the Docker image stay free of web dependencies. It talks to the models only through `absa.inference`. Flask is in the requirements.
 - **Large files never enter Git.** Checkpoints and datasets stay in `outputs/` and `data/`, or on Drive when training on Colab.
 
 ## Packaging

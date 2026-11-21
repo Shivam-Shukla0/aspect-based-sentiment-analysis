@@ -1,5 +1,10 @@
 """End-to-end inference protocol and common model interface."""
 
+from absa.inference.classifiers import (
+    AspectClassifierPredictor,
+    load_bert_predictor,
+    load_lstm_predictor,
+)
 from absa.inference.interface import (
     AspectPrediction,
     CheckpointNotFoundError,
@@ -18,6 +23,7 @@ from absa.inference.interface import (
 )
 
 __all__ = [
+    "AspectClassifierPredictor",
     "AspectPrediction",
     "CheckpointNotFoundError",
     "DuplicateModelError",
@@ -28,6 +34,8 @@ __all__ = [
     "Predictor",
     "get_predictor",
     "list_available_models",
+    "load_bert_predictor",
+    "load_lstm_predictor",
     "predict_validated",
     "register_predictor",
     "require_checkpoint",
