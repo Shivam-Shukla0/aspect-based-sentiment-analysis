@@ -7,8 +7,9 @@ pytest.importorskip("torch")
 pytest.importorskip("transformers")
 pytest.importorskip("sklearn")
 import torch
+import transformers
 from transformers import BertConfig as HfBertConfig
-from transformers import BertForSequenceClassification, BertTokenizerFast
+from transformers import BertForSequenceClassification
 
 from absa.models.bert_classifier import (
     BertConfig,
@@ -93,7 +94,7 @@ def tiny_model_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     directory = tmp_path_factory.mktemp("tiny_bert")
     vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", *sorted(set(WORDS))]
     (directory / "vocab.txt").write_text("\n".join(vocab) + "\n", encoding="utf-8")
-    BertTokenizerFast(vocab_file=str(directory / "vocab.txt")).save_pretrained(directory)
+    transformers.BertTokenizerFast(vocab_file=str(directory / "vocab.txt")).save_pretrained(directory)
     torch.manual_seed(0)
     config = HfBertConfig(
         vocab_size=len(vocab),
@@ -102,8 +103,9 @@ def tiny_model_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
         num_attention_heads=2,
         intermediate_size=32,
         max_position_embeddings=64,
+        num_labels=3,
     )
-    BertForSequenceClassification(config).save_pretrained(directory)
+    BertForSequenceClassification(config).save_pretrained(directory)  # type: ignore[no-untyped-call]
     return directory
 
 
