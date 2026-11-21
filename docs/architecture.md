@@ -28,22 +28,23 @@ The JSON shape is the output contract, not a model prediction. Classification wi
 
 All packages live under `src/` and are installed as `absa`. The last column lists the only other `absa` parts a package may import, apart from itself.
 
-| Package                | Responsibility                                                                       | Status                                                     | May import                               |
-| ---------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| `absa.config`          | Shared constants: paths, domains, sentiment labels, default seed. No logic.          | implemented                                                | none                                     |
-| `absa.reproducibility` | Seeding for Python, NumPy and PyTorch.                                               | implemented                                                | `config`                                 |
-| `absa.data`            | Aspect-record schema and validation, leakage guard. Parsing and splits will join it. | schema and leakage implemented, parsing and splits planned | `config`, `reproducibility`              |
-| `absa.models`          | Sentiment classifiers that take a review and a supplied aspect.                      | planned                                                    | `config`, `data`, `reproducibility`      |
-| `absa.extraction`      | Aspect extraction from a review.                                                     | planned                                                    | `config`, `data`, `reproducibility`      |
-| `absa.evaluation`      | Metrics and the evaluation protocol. Works on predictions, never on models.          | planned                                                    | `config`, `data`                         |
-| `absa.inference`       | One prediction interface that combines models and extraction.                        | planned                                                    | `config`, `data`, `models`, `extraction` |
+| Package                | Responsibility                                                                                                 | Status                                                     | May import                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| `absa.config`          | Shared constants: paths, domains, sentiment labels, default seed. No logic.                                    | implemented                                                | none                                                       |
+| `absa._lazy`           | Lazy attribute helper that keeps optional heavy dependencies (torch, scikit-learn, lxml) out of plain imports. | implemented                                                | none                                                       |
+| `absa.reproducibility` | Seeding for Python, NumPy and PyTorch.                                                                         | implemented                                                | `config`                                                   |
+| `absa.data`            | Aspect-record schema and validation, leakage guard. Parsing and splits will join it.                           | schema and leakage implemented, parsing and splits planned | `config`, `reproducibility`, `_lazy`                       |
+| `absa.models`          | Sentiment classifiers that take a review and a supplied aspect.                                                | planned                                                    | `config`, `data`, `evaluation`, `reproducibility`, `_lazy` |
+| `absa.extraction`      | Aspect extraction from a review.                                                                               | planned                                                    | `config`, `data`, `reproducibility`, `_lazy`               |
+| `absa.evaluation`      | Metrics and the evaluation protocol. Works on predictions, never on models.                                    | planned                                                    | `config`, `data`                                           |
+| `absa.inference`       | One prediction interface that combines models and extraction.                                                  | planned                                                    | `config`, `data`, `models`, `extraction`                   |
 
 `absa.__main__` is the command line entry point (`python -m absa`). Like `app/`, `scripts/` and the notebooks, it is allowed to compose several packages.
 
 ## Dependency rules
 
 ```
-config, reproducibility        leaf modules, importable from anywhere below
+config, reproducibility, _lazy  leaf modules, importable from anywhere below
         ^
       data
         ^
@@ -55,7 +56,7 @@ absa.__main__, scripts/, app/, notebooks/
 ```
 
 1. Imports point downwards only. The rules form a directed acyclic graph, which the tests verify, so circular imports cannot appear.
-2. Siblings do not import each other. `models` and `extraction` are combined in `inference`; `evaluation` receives predictions as plain records, so metrics do not depend on how a prediction was produced. A script combines models and evaluation when a benchmark needs both.
+2. Siblings do not import each other. `models` and `extraction` are combined in `inference`; `evaluation` receives predictions as plain records, so metrics do not depend on how a prediction was produced. The one exception is `models`, which may use `evaluation` for validation metrics during training; `evaluation` never imports `models`. A script combines models and evaluation when a benchmark needs both.
 3. Only entry points compose packages: `absa.__main__`, `scripts/`, `app/` and notebooks.
 4. Imports inside functions or under `TYPE_CHECKING` count as dependencies.
 5. Changing a rule means editing the table above and `tests/test_architecture.py` in the same pull request. Both are shared contracts, so every workstream should review such a change.
