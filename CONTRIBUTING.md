@@ -5,7 +5,7 @@
 1. Open or pick a GitHub issue before starting work.
 2. Self-assign the issue (comment on the issue, add yourself to assignees). Maintain one active issue per person per workstream to prevent bottlenecks.
 3. Branch from the latest `main`: `feature/<issue-number>-<short-name>` (also `fix/...`, `docs/...`, `test/...`, `chore/...`, `ci/...`).
-4. Commit with a conventional prefix and the issue number, e.g. `feat(scope): subject (#<issue>)`. Prefixes: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `ci`. Commit subject lines must stay under 72 characters.
+4. Commit with a conventional prefix and the issue number, e.g. `feat(scope): subject (#<issue>)`. Prefixes: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `ci`. Commit subject lines must be at most 72 characters.
 5. Push the branch and open a pull request that says `Closes #<issue>`.
 6. Do not push directly to `main`.
 
