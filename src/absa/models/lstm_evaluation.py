@@ -18,7 +18,7 @@ from sklearn.metrics import confusion_matrix
 
 from absa.config import SENTIMENT_LABELS
 from absa.evaluation import EvaluationResult, evaluate
-from absa.models.lstm_attention import AbsaLstmModel
+from absa.models.lstm_attention import AbsaLstmModel, resolve_device
 from absa.models.lstm_dataset import AspectDataset, make_dataloader
 from absa.models.lstm_tokens import Vocabulary
 
@@ -87,14 +87,23 @@ class TestEvaluationReport:
 
 
 def predict(
-    model: AbsaLstmModel, vocab: Vocabulary, records: Sequence[Mapping[str, object]]
+    model: AbsaLstmModel,
+    vocab: Vocabulary,
+    records: Sequence[Mapping[str, object]],
+    device: str = "auto",
 ) -> list[str]:
-    """Run inference over ``records`` and return one predicted label per record, in order."""
+    """Run inference over ``records`` and return one predicted label per record, in order.
+
+    The model is moved to ``device`` (``auto`` uses CUDA when it is available).
+    """
+    target = resolve_device(device)
+    model.to(target)
     model.eval()
     loader = make_dataloader(AspectDataset(records, vocab), vocab.pad_id, batch_size=32)
     predictions: list[str] = []
     with torch.no_grad():
-        for batch in loader:
+        for cpu_batch in loader:
+            batch = {key: value.to(target) for key, value in cpu_batch.items()}
             logits, _ = model(
                 batch["review_ids"],
                 batch["review_lengths"],
@@ -122,10 +131,11 @@ def evaluate_test_set(
     vocab: Vocabulary,
     records: Sequence[Mapping[str, object]],
     labels: Sequence[str] = SENTIMENT_LABELS,
+    device: str = "auto",
 ) -> TestEvaluationReport:
     """Evaluate ``model`` on ``records`` (the frozen test set): metrics, confusion, errors."""
     y_true = [str(record["sentiment"]) for record in records]
-    y_pred = predict(model, vocab, records)
+    y_pred = predict(model, vocab, records, device)
     metrics = evaluate(y_true, y_pred, labels=labels)
     confusion = confusion_matrix(y_true, y_pred, labels=list(labels)).tolist()
     errors = analyze_errors(records, y_true, y_pred)

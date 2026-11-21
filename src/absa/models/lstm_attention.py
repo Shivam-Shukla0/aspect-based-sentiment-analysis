@@ -131,6 +131,20 @@ class AspectAttention(nn.Module):
         return logits, weights
 
 
+def resolve_device(name: str = "auto") -> torch.device:
+    """Return the torch device for ``name``: ``auto`` picks CUDA when it is available.
+
+    Raises:
+        ValueError: If ``name`` asks for CUDA but no CUDA device is available.
+    """
+    if name == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(name)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError(f"device {name!r} was requested but CUDA is not available")
+    return device
+
+
 @dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Architecture hyperparameters for ``AbsaLstmModel``."""
@@ -152,28 +166,20 @@ class AbsaLstmModel(nn.Module):
     """
 
     def __init__(
-        self,
-        vocab_size: int,
-        pad_id: int,
-        num_classes: int,
-        config: ModelConfig | None = None,
+        self, vocab_size: int, pad_id: int, num_classes: int, config: ModelConfig = ModelConfig()
     ) -> None:
-        """Build the embedding, encoder and attention/classifier layers from ``config``.
-
-        ``config`` defaults to a fresh ``ModelConfig`` per instance (created
-        inside the method) so the default is not evaluated once at import time.
-        """
+        """Build the embedding, encoder and attention/classifier layers from ``config``."""
         super().__init__()
-        resolved_config = config if config is not None else ModelConfig()
-        self.config = resolved_config
-        self.embedding = build_embedding(vocab_size, resolved_config.embedding_dim, pad_id)
+        self.config = config
+        self.embedding = build_embedding(vocab_size, config.embedding_dim, pad_id)
         self.encoder = LstmEncoder(
-            resolved_config.embedding_dim,
-            resolved_config.hidden_size,
-            resolved_config.num_layers,
-            resolved_config.dropout,
-            bidirectional=resolved_config.bidirectional,
+            config.embedding_dim,
+            config.hidden_size,
+            config.num_layers,
+            config.dropout,
+            bidirectional=config.bidirectional,
         )
+        self.embedding_dropout = nn.Dropout(config.dropout)
         self.attention = AspectAttention(self.encoder.output_size, num_classes)
 
     def forward(
@@ -183,8 +189,13 @@ class AbsaLstmModel(nn.Module):
         aspect_ids: Tensor,
         aspect_lengths: Tensor,
     ) -> tuple[Tensor, Tensor]:
-        """Encode the review and aspect, then classify; returns ``(logits, weights)``."""
-        review_states, review_mask = self.encoder(self.embedding(review_ids), review_lengths)
-        aspect_states, aspect_mask = self.encoder(self.embedding(aspect_ids), aspect_lengths)
+        """Encode the review and aspect, then classify; returns ``(logits, weights)``.
+
+        ``config.dropout`` is applied to the embeddings in training mode only.
+        """
+        review_embedded = self.embedding_dropout(self.embedding(review_ids))
+        aspect_embedded = self.embedding_dropout(self.embedding(aspect_ids))
+        review_states, review_mask = self.encoder(review_embedded, review_lengths)
+        aspect_states, aspect_mask = self.encoder(aspect_embedded, aspect_lengths)
         logits, weights = self.attention(review_states, review_mask, aspect_states, aspect_mask)
         return logits, weights
