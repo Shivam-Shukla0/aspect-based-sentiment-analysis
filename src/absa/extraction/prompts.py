@@ -35,15 +35,16 @@ FEW_SHOT_EXAMPLES: Final[tuple[dict[str, object], ...]] = (
         ],
     },
     {
-        "review": "It runs fine for everyday tasks.",
+        "review": "It comes with a backlit keyboard and two USB ports.",
         "predictions": [
-            {"aspect": "everyday tasks", "sentiment": "neutral"},
+            {"aspect": "backlit keyboard", "sentiment": "neutral"},
+            {"aspect": "USB ports", "sentiment": "neutral"},
         ],
     },
     {
-        "review": "The food was tasty but overpriced, creating mixed impressions.",
+        "review": "The staff were friendly at first but turned rude later.",
         "predictions": [
-            {"aspect": "food", "sentiment": "conflict"},
+            {"aspect": "staff", "sentiment": "conflict"},
         ],
     },
 )

@@ -58,3 +58,11 @@ def test_format_few_shot_prompt() -> None:
     for ex in FEW_SHOT_EXAMPLES:
         assert str(ex["review"]) in prompt
         assert json.dumps(ex["predictions"]) in prompt
+
+
+def test_few_shot_aspects_occur_verbatim_in_review() -> None:
+    for ex in FEW_SHOT_EXAMPLES:
+        preds = ex["predictions"]
+        assert isinstance(preds, list)
+        for item in preds:
+            assert str(item["aspect"]) in str(ex["review"])
