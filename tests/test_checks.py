@@ -249,8 +249,10 @@ def _notebook(outputs: list[object] | None = None, execution_count: int | None =
 
 def test_notebook_checks() -> None:
     assert checks.check_notebook("n.ipynb", _notebook()) == []
+    assert checks.check_notebook("n.ipynb", _notebook(execution_count=3)) == []
     assert any(
-        "outputs" in e for e in checks.check_notebook("n.ipynb", _notebook(execution_count=3))
+        "limit" in e
+        for e in checks.check_notebook("n.ipynb", _notebook() + " " * checks.MAX_NOTEBOOK_BYTES)
     )
     assert any("invalid notebook" in e for e in checks.check_notebook("n.ipynb", "{}"))
 
