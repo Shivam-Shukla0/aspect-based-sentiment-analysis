@@ -35,6 +35,7 @@ CORE_PACKAGES = (
     "accelerate",
     "sentencepiece",
     "matplotlib",
+    "flask",
 )
 PROJECT = "absa"
 RECORD_NAME = "environment.txt"
