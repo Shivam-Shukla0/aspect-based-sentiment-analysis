@@ -187,7 +187,7 @@ def train_bert(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
     total_steps = max(config.epochs * len(train_loader), 1)
-    scheduler = get_linear_schedule_with_warmup(
+    scheduler = get_linear_schedule_with_warmup(  # type: ignore[no-untyped-call]
         optimizer, int(total_steps * config.warmup_ratio), total_steps
     )
 

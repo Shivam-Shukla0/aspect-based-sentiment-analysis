@@ -94,9 +94,12 @@ def tiny_model_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     directory = tmp_path_factory.mktemp("tiny_bert")
     vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", *sorted(set(WORDS))]
     (directory / "vocab.txt").write_text("\n".join(vocab) + "\n", encoding="utf-8")
-    transformers.BertTokenizerFast(vocab_file=str(directory / "vocab.txt")).save_pretrained(directory)
+    tokenizer = transformers.BertTokenizerFast(  # type: ignore[attr-defined]
+        vocab_file=str(directory / "vocab.txt")
+    )
+    tokenizer.save_pretrained(directory)
     torch.manual_seed(0)
-    config = HfBertConfig(
+    config = HfBertConfig(  # type: ignore[call-arg]
         vocab_size=len(vocab),
         hidden_size=16,
         num_hidden_layers=1,
