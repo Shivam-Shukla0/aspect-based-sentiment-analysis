@@ -38,19 +38,19 @@ def _records_with_ids(records: list[dict[str, object]]) -> list[dict[str, object
 def test_same_seed_gives_same_first_epoch_loss() -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
-    _, _, history_a = train(train_records, val_records, TINY_CONFIG)
-    _, _, history_b = train(train_records, val_records, TINY_CONFIG)
+    _, _, history_a, _ = train(train_records, val_records, TINY_CONFIG)
+    _, _, history_b, _ = train(train_records, val_records, TINY_CONFIG)
     assert history_a[0].train_loss == history_b[0].train_loss
 
 
 def test_different_seed_can_give_different_first_epoch_loss() -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
-    _, _, history_a = train(train_records, val_records, TINY_CONFIG)
+    _, _, history_a, _ = train(train_records, val_records, TINY_CONFIG)
     other_config = LstmConfig(
         embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.3, seed=7
     )
-    _, _, history_b = train(train_records, val_records, other_config)
+    _, _, history_b, _ = train(train_records, val_records, other_config)
     assert history_a[0].train_loss != history_b[0].train_loss
 
 
@@ -58,7 +58,7 @@ def test_training_produces_one_epoch_metrics_entry_per_epoch() -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
     config = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=3, val_fraction=0.3)
-    _, _, history = train(train_records, val_records, config)
+    _, _, history, _ = train(train_records, val_records, config)
     assert [epoch_metrics.epoch for epoch_metrics in history] == [1, 2, 3]
 
 
@@ -73,14 +73,14 @@ def test_loss_decreases_with_enough_epochs_on_a_tiny_dataset() -> None:
         learning_rate=0.01,
         val_fraction=0.3,
     )
-    _, _, history = train(train_records, val_records, config)
+    _, _, history, _ = train(train_records, val_records, config)
     assert history[-1].train_loss < history[0].train_loss
 
 
 def test_checkpoint_round_trip_reproduces_predictions(tmp_path: Path) -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
-    model, vocab, _ = train(train_records, val_records, TINY_CONFIG)
+    model, vocab, _, _ = train(train_records, val_records, TINY_CONFIG)
     model.eval()
 
     checkpoint_path = tmp_path / "model.pt"

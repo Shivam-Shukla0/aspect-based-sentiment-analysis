@@ -152,11 +152,19 @@ class AbsaLstmModel(nn.Module):
     """
 
     def __init__(
-        self, vocab_size: int, pad_id: int, num_classes: int, config: ModelConfig = ModelConfig()
+        self,
+        vocab_size: int,
+        pad_id: int,
+        num_classes: int,
+        config: ModelConfig | None = None,
     ) -> None:
-        """Build the embedding, encoder and attention/classifier layers from ``config``."""
+        """Build the embedding, encoder and attention/classifier layers from ``config``.
+
+        ``config`` defaults to a fresh ``ModelConfig`` per instance (created
+        inside the method) so the default is not evaluated once at import time.
+        """
         super().__init__()
-        self.config = config
+        self.config = config if config is not None else ModelConfig()
         self.embedding = build_embedding(vocab_size, config.embedding_dim, pad_id)
         self.encoder = LstmEncoder(
             config.embedding_dim,
