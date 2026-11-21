@@ -46,6 +46,14 @@ def compute_span_counts(
 
     Returns:
         Tuple of (true_positives, false_positives, false_negatives).
+
+    Note:
+        Matching is greedy and one-to-one: each predicted span, in the order given, claims
+        the first unmatched gold span it matches. With ``exact_match=True`` the result does
+        not depend on order. With overlap matching it can: a prediction that overlaps two
+        gold spans takes the earlier one, which may leave a later prediction with no match
+        even though a different pairing would score higher. Pass predictions sorted by
+        start offset for reproducible results.
     """
     matched_gold: set[int] = set()
     tp = 0
