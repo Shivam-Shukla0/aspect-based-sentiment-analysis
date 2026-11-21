@@ -10,7 +10,13 @@ from absa.config import SENTIMENT_LABELS
 
 @dataclass(frozen=True)
 class ValidatedAspect:
-    """A validated aspect prediction aligned with review text."""
+    """A validated aspect prediction aligned with review text.
+
+    This is separate from the shared ``AspectPrediction`` contract (#50) on purpose: it
+    carries character offsets (``start``/``end``) recovered by locating the aspect in the
+    review, which the model output itself does not contain. When #50 lands it should be
+    converted to, or replaced by, the shared type.
+    """
 
     aspect: str
     sentiment: str
