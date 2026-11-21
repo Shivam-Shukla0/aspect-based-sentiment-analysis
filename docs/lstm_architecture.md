@@ -23,6 +23,12 @@ aspect tokens  -> embedding -> LstmEncoder -> aspect_states (batch, atime, H), a
 
 `AspectAttention.forward` returns `(logits, attention_weights)`; the weights are exposed (not discarded) so a caller can inspect which review tokens drove a prediction, as the issue's scope asks for.
 
+## Training, best checkpoint and class imbalance (`absa.models.lstm_training`)
+
+- **Best epoch.** `train` keeps a copy of the weights whenever validation macro F1 improves (strictly, so the earliest epoch wins a tie) and loads them back before returning. The checkpoint written by `run_training` is therefore the best epoch, and `best_epoch` in the run log names it.
+- **Class imbalance.** `LstmConfig.class_weighting` is off by default, which means plain cross-entropy. When it is on, each class in the *training* loss is weighted by `total / (classes_present * class_count)`, so rare classes count more; a class with no training example gets weight 0. The validation loss is never weighted, so it stays comparable between runs. The setting is stored in the run log with the rest of the config.
+- **Noisy selection.** Choosing the best epoch from validation macro F1 is only as reliable as the validation split. On the 100-sentence trial files that split has fewer than a dozen records, so the choice of epoch (and any comparison between settings) is noise there and should not be read as a result.
+
 ## What is not yet wired up
 
-Training, checkpointing and evaluation (issues #24 and #25) are not part of this module; this is the forward pass only, used directly in tests with random weights and verified with real tokenized data.
+Evaluation on the official test split (issue #25) and the numbers in `reports/lstm_results.md` need to be redone with the best-epoch checkpoint on the full files; they were produced from the last epoch.

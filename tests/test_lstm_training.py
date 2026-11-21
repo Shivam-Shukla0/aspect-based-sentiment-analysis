@@ -8,7 +8,6 @@ pytest.importorskip("sklearn")
 import torch
 
 from absa.models import LstmConfig, load_checkpoint, run_training, save_checkpoint, train
-from absa.models.lstm_training import _class_weights
 
 
 def _rec(review: str, aspect: str, sentiment: str) -> dict[str, object]:
@@ -152,10 +151,37 @@ def test_train_returns_the_best_epoch_not_the_last(monkeypatch: pytest.MonkeyPat
         assert torch.equal(value, expected[key])
 
 
-def test_class_weights_favour_rare_classes_and_zero_absent_ones() -> None:
-    records = [_rec("a", "a", "positive")] * 6 + [_rec("b", "b", "negative")] * 2
-    weights = _class_weights(records)
-    assert weights.tolist() == pytest.approx([8 / (2 * 6), 8 / (2 * 2), 0.0, 0.0])
+def test_class_weights_reach_the_training_loss_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[torch.Tensor | None] = []
+    real = torch.nn.functional.cross_entropy
+
+    def spy(
+        logits: torch.Tensor, target: torch.Tensor, weight: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        seen.append(weight)
+        return real(logits, target, weight=weight)
+
+    monkeypatch.setattr("torch.nn.functional.cross_entropy", spy)
+    records = _records_with_ids(RECORDS)
+    config = LstmConfig(
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=1,
+        val_fraction=0.3,
+        class_weighting=True,
+    )
+    train(records[:7], records[7:], config)
+
+    train_batches = 2  # 7 records in batches of 4
+    assert all(weight is not None for weight in seen[:train_batches])
+    assert all(weight is None for weight in seen[train_batches:])
+    weights = seen[0]
+    assert weights is not None
+    assert weights[3].item() == 0.0  # no training example is labelled "conflict"
+    positive, negative, neutral = weights[:3].tolist()
+    assert neutral > positive
+    assert neutral > negative  # "neutral" is the rarest label in the training records
 
 
 def test_training_with_class_weighting_runs_and_is_logged(tmp_path: Path) -> None:
