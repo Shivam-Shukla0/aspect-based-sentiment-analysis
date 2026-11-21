@@ -122,6 +122,12 @@ def test_aspect_span_rejects_bad_offsets(start: int, end: int) -> None:
         AspectSpan(term="abc", start=start, end=end, polarity="negative")
 
 
+@pytest.mark.parametrize("polarity", ["happy", "great", ""])
+def test_aspect_span_rejects_unknown_polarity(polarity: str) -> None:
+    with pytest.raises(ValueError, match="unknown sentiment"):
+        AspectSpan(term="battery", start=4, end=11, polarity=polarity)
+
+
 def test_extraction_record_rejects_empty_text() -> None:
     with pytest.raises(ValueError, match="non-empty string"):
         ExtractionRecord(text="  ", spans=())
