@@ -6,6 +6,7 @@ never into the repository; see ``CONTRIBUTING.md``.
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -26,7 +27,14 @@ from absa.reproducibility import set_seed
 
 @dataclass(frozen=True, slots=True)
 class LstmConfig:
-    """Hyperparameters for the LSTM-with-attention model and its training run."""
+    """Hyperparameters for the LSTM-with-attention model and its training run.
+
+    ``class_weighting`` chooses how class imbalance is handled. ``False`` (the default)
+    trains with the plain cross-entropy loss. ``True`` weights each class in the training
+    loss by ``total / (classes_present * class_count)``, so rare classes count more; classes
+    with no training example get weight 0. Validation loss is never weighted, so it stays
+    comparable between runs.
+    """
 
     embedding_dim: int = 50
     hidden_size: int = 32
@@ -39,6 +47,7 @@ class LstmConfig:
     epochs: int = 5
     val_fraction: float = 0.2
     seed: int = RANDOM_SEED
+    class_weighting: bool = False
 
     @property
     def model_config(self) -> ModelConfig:
@@ -103,15 +112,27 @@ def load_checkpoint(path: Path) -> tuple[AbsaLstmModel, Vocabulary]:
     return model, vocab
 
 
+def _class_weights(records: Sequence[Mapping[str, object]]) -> Tensor:
+    """Return balanced per-class loss weights, in ``SENTIMENT_LABELS`` order."""
+    counts = [sum(1 for r in records if r["sentiment"] == label) for label in SENTIMENT_LABELS]
+    present = sum(1 for count in counts if count > 0)
+    total = sum(counts)
+    return torch.tensor(
+        [total / (present * count) if count else 0.0 for count in counts], dtype=torch.float
+    )
+
+
 def _run_epoch(
     model: AbsaLstmModel,
     loader: DataLoader[dict[str, Tensor]],
     optimizer: torch.optim.Optimizer | None,
+    class_weights: Tensor | None = None,
 ) -> tuple[float, list[str], list[str]]:
     """Run one pass over ``loader``; trains if ``optimizer`` is given, else evaluates.
 
     Returns the average per-batch loss and the true/predicted label
-    strings for every example seen, for metric computation.
+    strings for every example seen, for metric computation. ``class_weights`` is
+    applied to the loss only when training.
     """
     model.train(mode=optimizer is not None)
     total_loss = 0.0
@@ -127,7 +148,9 @@ def _run_epoch(
                 batch["aspect_ids"],
                 batch["aspect_lengths"],
             )
-            loss: Tensor = nn.functional.cross_entropy(logits, batch["label"])
+            loss: Tensor = nn.functional.cross_entropy(
+                logits, batch["label"], weight=class_weights if optimizer is not None else None
+            )
         if optimizer is not None:
             optimizer.zero_grad()
             loss.backward()  # type: ignore[no-untyped-call]  # Tensor.backward lacks a full stub
@@ -148,8 +171,9 @@ def train(
 
     Seeds every random number generator before building the model or
     dataloaders, so a given ``config.seed`` reproduces the same first
-    epoch's training loss. Returns the final model, its vocabulary
-    (built from ``train_records`` only) and the per-epoch history.
+    epoch's training loss. Returns the model with the best validation macro F1
+    (the earliest such epoch on a tie), its vocabulary (built from
+    ``train_records`` only) and the per-epoch history.
     """
     set_seed(config.seed)
     vocab = Vocabulary.build([str(r["review"]) for r in train_records], min_freq=config.min_freq)
@@ -169,12 +193,20 @@ def train(
     )
     val_loader = make_dataloader(AspectDataset(val_records, vocab), vocab.pad_id, config.batch_size)
 
+    weights = _class_weights(train_records) if config.class_weighting else None
     history = []
+    best_f1 = float("-inf")
+    best_state: dict[str, Tensor] = {}
     for epoch in range(1, config.epochs + 1):
-        train_loss, _, _ = _run_epoch(model, train_loader, optimizer)
+        train_loss, _, _ = _run_epoch(model, train_loader, optimizer, weights)
         val_loss, val_true, val_pred = _run_epoch(model, val_loader, None)
         val_macro_f1 = evaluate(val_true, val_pred, labels=SENTIMENT_LABELS).macro_f1
         history.append(EpochMetrics(epoch, train_loss, val_loss, val_macro_f1))
+        if val_macro_f1 > best_f1:
+            best_f1 = val_macro_f1
+            best_state = copy.deepcopy(model.state_dict())
+    if best_state:
+        model.load_state_dict(best_state)
     return model, vocab, tuple(history)
 
 
@@ -183,9 +215,8 @@ def run_training(
 ) -> TrainingResult:
     """Split ``records``, train, and write the checkpoint and a run log to ``output_dir``.
 
-    The checkpoint is saved from the final epoch's weights; ``history``
-    records every epoch so the best epoch by validation macro F1 can be
-    identified without retraining.
+    The checkpoint holds the weights of the epoch with the best validation macro F1,
+    which is the epoch reported as ``best_epoch``; ``history`` records every epoch.
     """
     train_records, val_records = split_train_val(
         records, val_fraction=config.val_fraction, seed=config.seed

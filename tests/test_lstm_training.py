@@ -8,6 +8,7 @@ pytest.importorskip("sklearn")
 import torch
 
 from absa.models import LstmConfig, load_checkpoint, run_training, save_checkpoint, train
+from absa.models.lstm_training import _class_weights
 
 
 def _rec(review: str, aspect: str, sentiment: str) -> dict[str, object]:
@@ -111,3 +112,63 @@ def test_run_training_writes_checkpoint_and_log(tmp_path: Path) -> None:
     assert log["config"]["seed"] == TINY_CONFIG.seed
     assert len(log["history"]) == TINY_CONFIG.epochs
     assert log["best_epoch"] == result.best_epoch
+
+
+class _Score:
+    def __init__(self, macro_f1: float) -> None:
+        self.macro_f1 = macro_f1
+
+
+def _state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
+    return {key: value.clone() for key, value in model.state_dict().items()}
+
+
+def test_train_returns_the_best_epoch_not_the_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    records = _records_with_ids(RECORDS)
+    train_records, val_records = records[:7], records[7:]
+
+    def scripted(values: list[float]) -> None:
+        scores = iter(values)
+
+        def fake_evaluate(*_args: object, **_kwargs: object) -> _Score:
+            return _Score(next(scores))
+
+        monkeypatch.setattr("absa.models.lstm_training.evaluate", fake_evaluate)
+
+    config_three = LstmConfig(
+        embedding_dim=8, hidden_size=4, batch_size=4, epochs=3, val_fraction=0.3, seed=42
+    )
+    config_two = LstmConfig(
+        embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_fraction=0.3, seed=42
+    )
+    scripted([0.2, 0.9, 0.4])
+    model_three, _, history = train(train_records, val_records, config_three)
+    scripted([0.2, 0.9])
+    model_two, _, _ = train(train_records, val_records, config_two)
+
+    assert [round(h.val_macro_f1, 1) for h in history] == [0.2, 0.9, 0.4]
+    expected = _state(model_two)
+    for key, value in _state(model_three).items():
+        assert torch.equal(value, expected[key])
+
+
+def test_class_weights_favour_rare_classes_and_zero_absent_ones() -> None:
+    records = [_rec("a", "a", "positive")] * 6 + [_rec("b", "b", "negative")] * 2
+    weights = _class_weights(records)
+    assert weights.tolist() == pytest.approx([8 / (2 * 6), 8 / (2 * 2), 0.0, 0.0])
+
+
+def test_training_with_class_weighting_runs_and_is_logged(tmp_path: Path) -> None:
+    config = LstmConfig(
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=2,
+        val_fraction=0.3,
+        seed=42,
+        class_weighting=True,
+    )
+    result = run_training(_records_with_ids(RECORDS), config, output_dir=tmp_path)
+    log = json.loads((tmp_path / "lstm_training_log.json").read_text(encoding="utf-8"))
+    assert log["config"]["class_weighting"] is True
+    assert len(result.history) == 2
