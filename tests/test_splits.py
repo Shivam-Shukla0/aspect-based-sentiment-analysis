@@ -64,3 +64,16 @@ def test_every_record_is_placed_in_exactly_one_split() -> None:
 def test_invalid_val_fraction_rejected(bad_fraction: float) -> None:
     with pytest.raises(ValueError, match="val_fraction"):
         split_train_val(_records(10), val_fraction=bad_fraction)
+
+
+def test_sentences_with_identical_text_stay_on_one_side() -> None:
+    records: list[dict[str, object]] = []
+    for index in range(30):
+        review = "Great screen." if index < 2 else f"Unique sentence {index}."
+        records.append(
+            {"review": review, "aspect": "screen", "sentiment": "positive", "sentence_id": str(index)}
+        )
+    for seed in range(20):
+        train, val = split_train_val(records, val_fraction=0.2, seed=seed)
+        assert find_overlap(train, val) == set()
+        assert len(train) + len(val) == len(records)
