@@ -109,7 +109,8 @@ module = [
 warn_unused_ignores = false
 
 [tool.codespell]
-skip = "./.git,./.venv"
+# Notebook outputs hold base64 images and run logs, which are not prose.
+skip = "./.git,./.venv,*.ipynb"
 
 [tool.vulture]
 paths = ["src", "scripts"]
