@@ -28,16 +28,16 @@ The JSON shape is the output contract, not a model prediction. Classification wi
 
 All packages live under `src/` and are installed as `absa`. The last column lists the only other `absa` parts a package may import, apart from itself.
 
-| Package                | Responsibility                                                                                                 | Status                                                     | May import                                                 |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `absa.config`          | Shared constants: paths, domains, sentiment labels, default seed. No logic.                                    | implemented                                                | none                                                       |
-| `absa._lazy`           | Lazy attribute helper that keeps optional heavy dependencies (torch, scikit-learn, lxml) out of plain imports. | implemented                                                | none                                                       |
-| `absa.reproducibility` | Seeding for Python, NumPy and PyTorch.                                                                         | implemented                                                | `config`                                                   |
-| `absa.data`            | Aspect-record schema and validation, leakage guard. Parsing and splits will join it.                           | schema and leakage implemented, parsing and splits planned | `config`, `reproducibility`, `_lazy`                       |
-| `absa.models`          | Sentiment classifiers that take a review and a supplied aspect.                                                | planned                                                    | `config`, `data`, `evaluation`, `reproducibility`, `_lazy` |
-| `absa.extraction`      | Aspect extraction from a review.                                                                               | planned                                                    | `config`, `data`, `reproducibility`, `_lazy`               |
-| `absa.evaluation`      | Metrics and the evaluation protocol. Works on predictions, never on models.                                    | planned                                                    | `config`, `data`                                           |
-| `absa.inference`       | One prediction interface that combines models and extraction.                                                  | planned                                                    | `config`, `data`, `models`, `extraction`, `_lazy`          |
+| Package                | Responsibility                                                                                                 | Status      | May import                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `absa.config`          | Shared constants: paths, domains, sentiment labels, default seed. No logic.                                    | implemented | none                                                                     |
+| `absa._lazy`           | Lazy attribute helper that keeps optional heavy dependencies (torch, scikit-learn, lxml) out of plain imports. | implemented | none                                                                     |
+| `absa.reproducibility` | Seeding for Python, NumPy and PyTorch.                                                                         | implemented | `config`                                                                 |
+| `absa.data`            | Aspect-record schema and validation, leakage guard. Parsing and splits will join it.                           | implemented | `config`, `reproducibility`, `_lazy`                                     |
+| `absa.models`          | Sentiment classifiers that take a review and a supplied aspect, and the BERT aspect extractor.                 | implemented | `config`, `data`, `evaluation`, `extraction`, `reproducibility`, `_lazy` |
+| `absa.extraction`      | Aspect extraction from a review.                                                                               | implemented | `config`, `data`, `reproducibility`, `_lazy`                             |
+| `absa.evaluation`      | Metrics and the evaluation protocol. Works on predictions, never on models.                                    | implemented | `config`, `data`                                                         |
+| `absa.inference`       | One prediction interface that combines models and extraction.                                                  | implemented | `config`, `data`, `models`, `extraction`, `_lazy`                        |
 
 `absa.__main__` is the command line entry point (`python -m absa`). Like `app/`, `scripts/` and the notebooks, it is allowed to compose several packages.
 

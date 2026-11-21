@@ -15,6 +15,7 @@ from absa.evaluation.extraction import (
     compute_span_counts,
     evaluate_extraction_spans,
 )
+from absa.evaluation.extraction_errors import SpanError, span_report
 from absa.evaluation.metrics import ClassMetrics, EvaluationResult, evaluate
 
 __all__ = [
@@ -24,9 +25,11 @@ __all__ = [
     "EndToEndMetrics",
     "EvaluationResult",
     "ExtractionMetrics",
+    "SpanError",
     "compute_span_counts",
     "evaluate",
     "evaluate_end_to_end",
     "evaluate_extraction_spans",
     "evaluate_given_aspect_classification",
+    "span_report",
 ]

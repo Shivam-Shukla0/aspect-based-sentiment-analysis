@@ -26,7 +26,7 @@ ALLOWED: dict[str, frozenset[str]] = {
     "_lazy": frozenset(),
     "reproducibility": frozenset({"config"}),
     "data": frozenset({"config", "reproducibility", "_lazy"}),
-    "models": frozenset({"config", "data", "evaluation", "reproducibility", "_lazy"}),
+    "models": frozenset({"config", "data", "evaluation", "extraction", "reproducibility", "_lazy"}),
     "extraction": frozenset({"config", "data", "reproducibility", "_lazy"}),
     "evaluation": frozenset({"config", "data"}),
     "inference": frozenset({"_lazy", "config", "data", "models", "extraction"}),
