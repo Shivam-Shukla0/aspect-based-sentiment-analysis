@@ -1,165 +1,152 @@
 # Aspect-Based Sentiment Analysis of Product Reviews
 
-Course project (4 members, 14 days). Given a product review, identify the aspects it discusses and the sentiment toward each one.
-
-> **Status: scaffold only.** No model is implemented, trained or evaluated yet. Every component below is marked _planned_ until it exists.
-
-## Why aspect-based?
-
-Document-level sentiment gives one label per review. Reviews often mix opinions:
+Given a product review, identify the aspects it discusses and the sentiment expressed towards each one. The project compares two supervised approaches on SemEval-2014 Task 4 (laptop and restaurant reviews) under a single, leak-free evaluation protocol: an LSTM with aspect-driven attention, and a BERT sentence-pair classifier fine-tuned on a GPU. A third approach, language-model prompting, is implemented up to prompt construction, parsing and validation, but is not benchmarked (see [Scope and limitations](#scope-and-limitations)).
 
 ```
-Review: "The battery is weak but the screen is excellent."
-Document level: mixed / ambiguous
+Review:         "The battery is weak but the screen is excellent."
+Document level: mixed
 Aspect level:   battery -> negative, screen -> positive
 ```
 
-The JSON above is an illustration of the output contract, not a model prediction.
+## Contents
 
-## Objectives
-
-1. Build a reproducible pipeline on SemEval-2014 Task 4 (laptop and restaurant reviews).
-2. Compare three approaches under one shared evaluation protocol.
-3. Report honest results with limitations.
+- [Approaches](#approaches)
+- [Quick start on Google Colab](#quick-start-on-google-colab)
+- [Local setup](#local-setup)
+- [Data](#data)
+- [Usage](#usage)
+- [Evaluation protocol](#evaluation-protocol)
+- [Results](#results)
+- [Repository layout](#repository-layout)
+- [Quality gates and testing](#quality-gates-and-testing)
+- [Scope and limitations](#scope-and-limitations)
+- [Contributing](#contributing)
 
 ## Approaches
 
-| #   | Approach                                          | Module                               | Status  |
-| --- | ------------------------------------------------- | ------------------------------------ | ------- |
-| 1   | LSTM with aspect attention                        | `src/absa/models/lstm_attention.py`  | planned |
-| 2   | BERT sentence-pair classification                 | `src/absa/models/bert_classifier.py` | planned |
-| 3   | LLM prompting for aspect and sentiment extraction | `src/absa/extraction/`               | planned |
+| #   | Approach                          | Code                                                          | Status                                       |
+| --- | --------------------------------- | ------------------------------------------------------------- | -------------------------------------------- |
+| 1   | LSTM with aspect attention        | `src/absa/models/lstm_*.py`, `scripts/train_lstm.py`          | implemented, trained and evaluated           |
+| 2   | BERT sentence-pair classification | `src/absa/models/bert_classifier.py`, `scripts/train_bert.py` | implemented, trained and evaluated           |
+| 3   | Language-model prompting          | `src/absa/extraction/prompts.py`, `src/absa/models/llm*.py`   | prompts, parser, validation; not benchmarked |
 
-Approaches 1 and 2 classify sentiment for a **supplied** aspect. End-to-end evaluation also needs aspect extraction (approach 3 or another extractor), so the two settings are reported separately.
+Approaches 1 and 2 solve **given-aspect classification**: the aspect term is supplied and the model predicts its polarity. A complete system also needs aspect extraction, which is reported as a separate setting; BIO-tagged training data is prepared (`absa.extraction.bio`), an extractor is not trained.
 
-## Architecture (planned)
+## Quick start on Google Colab
 
-```
-raw SemEval XML -> data (parse, split, validate) -> processed records
-processed records -> models / extraction -> predictions
-predictions -> evaluation (shared protocol) -> reports
-review text -> inference -> {"review", "predictions": [{"aspect", "sentiment"}]}
-```
+The training code uses a CUDA GPU when one is available, so the notebooks are the recommended way to run it. Select a GPU runtime (_Runtime → Change runtime type_) and open a notebook:
 
-Package responsibilities, the rules for which package may import which, and where scripts and the web app live are in [docs/architecture.md](docs/architecture.md). The import rules are checked by `tests/test_architecture.py`.
+| Notebook                                                                                                                                                           | Purpose                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| [01_dataset_exploration](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/01_dataset_exploration.ipynb) | label balance, aspect frequency, review lengths |
+| [02_lstm_attention](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/02_lstm_attention.ipynb)           | tune and evaluate the LSTM                      |
+| [03_bert_classification](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/03_bert_classification.ipynb) | fine-tune and evaluate BERT, confusion matrices |
+| [04_llm_prompting](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/04_llm_prompting.ipynb)             | prompts, parsing and validation (no benchmark)  |
 
-## Dataset
+Each notebook clones the repository, installs the requirements, checks that a GPU is visible and runs the same scripts described below. Notebooks are committed with their outputs cleared.
 
-SemEval-2014 Task 4, <https://alt.qcri.org/semeval2014/task4/>. Data is not committed. See [data/README.md](data/README.md) for download, citation, splits, record schema and the handling of the `conflict` label. The original train/test separation is preserved.
+## Local setup
 
-## Repository structure
-
-```
-src/absa/        config, reproducibility, data, models, extraction, evaluation, inference
-scripts/         experiment entry points (planned) and CI tooling
-notebooks/       one planning notebook per experiment (no results yet)
-tests/           offline pytest suite using synthetic records
-docs/            architecture and dependency rules
-data/            raw/ and processed/ (git-ignored), data README
-outputs/         generated artifacts (git-ignored)
-reports/         course report material
-app/             Flask backend and frontend (planned, does not exist yet)
-```
-
-See [docs/architecture.md](docs/architecture.md) for what each package does and may import.
-
-## Environment setup (Kali Linux, CPU)
+Python 3.10 or newer. Use a virtual environment, and install the PyTorch build that matches your hardware first; `requirements.txt` leaves `torch` unpinned so it never replaces that choice.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m venv .venv && source .venv/bin/activate
+pip install torch                      # or the CUDA/CPU build for your platform, see pytorch.org
 pip install -r requirements.txt
-pip install -e .
-python -m scripts.verify_environment
+pip install -e . --no-deps
+python -m scripts.verify_environment   # add --require-gpu to fail without a CUDA device
 ```
 
-The last command prints the Python, package and device versions, then `environment ok`, and exits 0. It exits 1 and names the problem if Python is older than 3.10 or a core package is missing or broken. On Kali the device line reads `CUDA not available, running on CPU`.
+`verify_environment` prints the Python, package and device versions and exits non-zero if a core package is missing. `--record DIR` writes the same information, the platform and the git commit to `DIR/environment.txt`; keep that file next to every result you report.
 
-- Always use a virtual environment: recent Kali releases mark the system Python as externally managed, so a global `pip install` is refused.
-- Install the CPU build of `torch` first. The default Linux wheel pulls in several gigabytes of CUDA libraries, and `requirements.txt` does not replace a `torch` that is already installed.
-- Dependencies are unpinned. Do not pin a CUDA build in `requirements.txt`: it would break either Kali (no GPU) or Colab (its own CUDA version).
-- The check needs no network access.
+Without a GPU the code runs on the CPU, which is adequate for the test suite and small experiments but slow for BERT fine-tuning.
 
-## Google Colab (GPU)
+## Data
 
-Colab ships a CUDA-enabled `torch`; do not reinstall or upgrade it.
-
-1. Choose a GPU runtime: _Runtime_, _Change runtime type_, then a GPU such as T4.
-2. Store a read-only GitHub token as a Colab secret named `GITHUB_TOKEN` (the key icon in the left bar) and allow this notebook to read it. The repository is private, so cloning needs it.
-3. Run this in the first cell:
-
-```python
-import os
-
-from google.colab import userdata
-
-os.environ["GITHUB_TOKEN"] = userdata.get("GITHUB_TOKEN")
-!git clone https://oauth2:$GITHUB_TOKEN@github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
-%cd aspect-based-sentiment-analysis
-!git remote set-url origin https://github.com/Shivam-Shukla0/aspect-based-sentiment-analysis.git
-!pip install -q -r requirements.txt
-!pip install -q -e . --no-deps
-!python -m scripts.verify_environment --require-gpu
-```
-
-The `set-url` line removes the token from `.git/config`. The last line prints the GPU name and CUDA version, and exits 1 if the runtime has no GPU. `requirements.txt` leaves `torch` unpinned, so pip keeps the version Colab already has.
-
-Known pitfalls:
-
-- **Sessions reset.** The VM disk is wiped when the session ends or idles out, and GPU availability is not guaranteed on the free tier. Repeat the cell above in every new session, and copy results to Drive when a run finishes.
-- **Drive.** Mount it with `from google.colab import drive; drive.mount("/content/drive")`, then copy, for example, `!cp -r outputs/<experiment> /content/drive/MyDrive/absa/`. Keep checkpoints and datasets there, never in Git.
-- **Secrets.** Read tokens and API keys with `userdata.get`. Never paste them into a cell or let them appear in a cell output, and clear notebook outputs before committing.
-- **Restart prompts.** If pip replaces a package that is already imported, Colab asks for a restart. Restart the runtime and run the cell again.
-
-## Recording the environment for a result
-
-Every result in a report, table or pull request must be traceable to the environment that produced it. In the session that produced a result, run:
+SemEval-2014 Task 4 is not committed to the repository. The official files are distributed through the ILSP Metashare repository and require registration and acceptance of its licence; follow [data/README.md](data/README.md) for the exact files, the record schema, the checksum table and the handling of the `conflict` label. Place the four XML files in `data/raw/` (they are git-ignored), then:
 
 ```bash
-python -m scripts.verify_environment --record outputs/<experiment>/
+python -m scripts.check_dataset                     # verify files against the recorded checksums
+python -m scripts.build_processed data/raw/Laptop_Train_v2.xml       --domain laptop     --split train
+python -m scripts.build_processed data/raw/Laptops_Test_Gold.xml     --domain laptop     --split test
+python -m scripts.build_processed data/raw/Restaurants_Train_v2.xml  --domain restaurant --split train
+python -m scripts.build_processed data/raw/Restaurants_Test_Gold.xml --domain restaurant --split test
+python -m scripts.validate_processed data/processed/laptop_train.jsonl
 ```
 
-This writes `outputs/<experiment>/environment.txt` with the Python and platform versions, the device, the git commit, and every installed package as `name==version`, sorted by name (the project itself is left out). Convention:
+Each run writes one aspect-level JSON Lines file per domain and split, plus a `*_no_aspect.jsonl` file with the sentences that carry no aspect annotation.
 
-- Keep one `outputs/<experiment>/` directory per run, with the metrics, the checkpoint and `environment.txt` together. On Colab, copy the whole directory to Drive.
-- Quote a result together with its seed (see `absa.reproducibility.set_seed`), its git commit and the Python, `torch`, `transformers` and device lines from the record.
-- `outputs/` is git-ignored, so copy those lines into `reports/` or the pull request when you report the result.
-- The file is a record, not a lock file. The `torch` pin carries its build suffix (for example `+cpu`), which is not on PyPI, so rebuild by installing the same `torch` from the matching index.
+## Usage
 
-## Data preparation
+```bash
+# LSTM: tune on the validation split, then score the test file once
+python -m scripts.train_lstm --domain laptop --hidden 128 --lr 0.001 0.003 --dropout 0.0 0.3 0.5 --weighting off --epochs 40
 
-Download the SemEval-2014 files into `data/raw/` as described in [data/README.md](data/README.md). Parsing and processing code is planned and not yet implemented.
+# BERT: learning-rate search, best epoch kept, test file scored once
+python -m scripts.train_bert --domain laptop
+```
 
-## Tests
+Both scripts write `summary.json` (every tried setting with its validation macro F1, the chosen setting, the test metrics) and `test_report.json` (per-class precision, recall and F1, a confusion matrix and every misclassified example) to `outputs/<model>_<domain>/`. Outputs are git-ignored.
+
+The validation CLI checks aspect records from a file or stdin:
+
+```bash
+echo '{"review": "The battery is weak.", "aspect": "battery", "sentiment": "negative"}' | python -m absa validate
+```
+
+## Evaluation protocol
+
+- **Official splits.** The original train and test files are never mixed. A validation split (20%) is carved out of the training data only.
+- **No leakage.** Records are grouped by normalised review text before splitting, so two aspects of one sentence, or two sentences with identical text, never fall on both sides of a split; `absa.data.leakage.assert_no_leakage` checks the result.
+- **The test set is read once.** Every choice (learning rate, dropout, the epoch to keep) uses validation macro F1 only. The test file is scored after the setting is fixed.
+- **Labels.** The rare `conflict` label is dropped for training and scoring (the usual SemEval protocol); metrics are accuracy and macro F1 over the three polarity classes, with per-class results and a confusion matrix.
+- **Baselines.** Always predicting the majority class (`positive`) scores about 0.53 accuracy on laptops and 0.65 on restaurants. A model should be judged against these figures, not against chance.
+- **Reproducibility.** Every random number generator is seeded through `absa.reproducibility.set_seed` (default seed 42). GPU kernels can still introduce small run-to-run differences.
+
+## Results
+
+Results, per-class tables, the error analysis and their limitations are in the technical report, [reports/report.tex](reports/report.tex), written for the _Natural Language Engineering_ journal class (see [reports/README.md](reports/README.md) for how to build it). Figures are not repeated here so that there is one authoritative source. The report states plainly that results come from one run per setting and from a copy of the dataset that did not come through the official Metashare route, and they should be re-run on the official files before being quoted elsewhere.
+
+## Repository layout
+
+```
+src/absa/            installable package
+  config.py            paths, labels, seed
+  data/                aspect-record schema, parsers, normalisation, validation, splits, EDA, leakage guard
+  extraction/          BIO tagging and structured prompts
+  models/              LSTM with aspect attention, BERT classifier, language-model client, output validation
+  evaluation/          shared precision/recall/F1, span and end-to-end evaluators
+  inference/           common predictor interface and registry
+scripts/             command line entry points and CI tooling
+app/                 static demo page for per-aspect results
+notebooks/           Colab notebooks (outputs cleared)
+tests/               offline test suite on synthetic records
+docs/                architecture, annotation format, model notes
+reports/             technical report (LaTeX)
+data/  outputs/      git-ignored working directories (data, checkpoints, metrics)
+```
+
+Package dependencies point one way (`config` → `data` → `models`/`extraction` → `inference`, with `evaluation` independent of models); the rules are in [docs/architecture.md](docs/architecture.md) and enforced by `tests/test_architecture.py`.
+
+## Quality gates and testing
 
 ```bash
 pip install -r requirements-dev.txt
-pytest
+pytest                      # offline, warnings are errors, 95% coverage floor
+ruff check . && ruff format --check . && mypy
 ```
 
-Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. To run only the fast tests, use `pytest -m "not slow and not gpu"`. See [Test conventions](CONTRIBUTING.md#test-conventions) for the rules and shared fixtures. The full CI check set can be run locally (see [CONTRIBUTING.md](CONTRIBUTING.md#running-ci-locally)).
+CI runs on every pull request: lint and format, strict type checking, tests on Python 3.10 to 3.13, a separate job with the full ML dependencies and a coverage floor, a dependency audit, packaging and Docker builds, repository hygiene (no datasets, checkpoints, secrets or notebook outputs), and commit and pull-request format checks. The test suite is deterministic and needs no network or GPU; GPU-specific tests skip themselves on machines without CUDA.
 
-## Docker
+## Scope and limitations
 
-```bash
-docker build -t absa .
-echo '{"review": "The battery is weak.", "aspect": "battery", "sentiment": "negative"}' | docker run --rm -i absa validate
-```
+- Given-aspect classification only; no trained aspect extractor and therefore no end-to-end figure.
+- Language-model prompting is not benchmarked: it needs a model endpoint and key that are not part of the repository.
+- The LSTM starts from random word vectors and is a baseline; BERT is the stronger model.
+- Single seed per setting; differences between near-identical settings are within what another seed could change.
+- A web back end for the demo page is not implemented; `app/` contains the static front end only.
+- No licence has been chosen. Until the team adds one, all rights are reserved by default.
 
-The image only contains the lightweight package and its record-validation CLI (`python -m absa validate`). It does not contain any model.
+## Contributing
 
-## Team workflow
-
-See [CONTRIBUTING.md](CONTRIBUTING.md): issue first, feature branch, pull request with review, tests passing.
-
-## Implementation status
-
-- Done: project layout, config, record schema validation, seeding helper, leakage guard, architecture document and import-rule tests.
-- Planned: data parsing and splits, LSTM-attention, BERT classifier, LLM extraction, evaluation, inference, demo app.
-
-## Limitations and reproducibility
-
-- No results exist yet; none should be quoted until produced by code in this repository.
-- Seeds are fixed via `absa.config.RANDOM_SEED`, but GPU training can still be non-deterministic.
-- No licence has been chosen. The team must decide before public reuse; until then all rights are reserved by default.
+See [CONTRIBUTING.md](CONTRIBUTING.md): an issue first, a short-lived branch (`<type>/<issue-number>-<name>`), conventional commit subjects of at most 72 characters, and a pull request that passes the checks.
