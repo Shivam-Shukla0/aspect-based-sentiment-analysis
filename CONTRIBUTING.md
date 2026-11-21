@@ -45,6 +45,11 @@ npx --yes prettier@3.6.2 --check "**/*.{md,yml,yaml,json}"
 docker build -t absa:ci . && scripts/smoke_test.sh docker run --rm -i absa:ci
 ```
 
+## Experiments and results
+
+- Seed every experiment with `absa.reproducibility.set_seed`.
+- Record the environment next to every result you report: `python -m scripts.verify_environment --record outputs/<experiment>/`. Quote the seed, git commit and key package versions with the result. See the README section "Recording the environment for a result".
+
 ## Do not commit
 
 - Secrets, tokens, API keys, or `.env` files.
