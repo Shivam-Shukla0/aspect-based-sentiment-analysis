@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from absa.config import SENTIMENT_LABELS
+from absa.models.llm_errors import LLMClientError
 
 
 @dataclass(frozen=True)
@@ -31,13 +33,28 @@ class ValidationReport:
     total_candidates: int = 0
     valid_count: int = 0
     invalid_count: int = 0
-    retries_used: int = 0
+    retries_used: int = 0  # retries performed after a failed attempt
     errors: list[str] = field(default_factory=list)
 
     @property
     def is_successful(self) -> bool:
-        """Return True if at least one valid prediction exists or zero candidates were given."""
+        """Return True if no candidate was rejected (also True when there were no candidates)."""
         return self.invalid_count == 0
+
+
+def _find_unused(review: str, aspect: str, used: set[int]) -> tuple[int, int] | None:
+    """Return the span of the first occurrence of ``aspect`` in ``review`` not claimed yet.
+
+    An exact match is preferred; if there is none, a case-insensitive match is used. The
+    search runs on the original review (not on a lower-cased copy, whose length can differ),
+    so the returned offsets always index into ``review``. Starting positions already in
+    ``used`` are skipped, so an aspect that is mentioned twice maps to two different spans.
+    """
+    for flags in (0, re.IGNORECASE):
+        for match in re.finditer(re.escape(aspect), review, flags):
+            if match.start() not in used:
+                return match.start(), match.end()
+    return None
 
 
 def validate_aspect_predictions(
@@ -54,9 +71,17 @@ def validate_aspect_predictions(
 
     Returns:
         List of validated and offset-aligned ValidatedAspect objects.
+
+    Note:
+        Repeated mentions of one aspect are assigned to successive occurrences in the order
+        the model listed them, which is only the text order if the model followed it. The
+        prompt should therefore ask for aspects in order of appearance. Nested aspects such
+        as "battery" and "battery life" both start at the same position, so only the first
+        one listed is kept.
     """
     rep = report if report is not None else ValidationReport()
     validated: list[ValidatedAspect] = []
+    used: set[int] = set()
 
     for item in raw_predictions:
         rep.total_candidates += 1
@@ -73,26 +98,34 @@ def validate_aspect_predictions(
             rep.errors.append(f"Invalid sentiment label: {sentiment!r}")
             continue
 
-        start = review.find(aspect)
-        if start == -1:
+        span = _find_unused(review, aspect, used)
+        if span is None:
             rep.invalid_count += 1
             rep.errors.append(f"Aspect {aspect!r} not found in review text")
             continue
 
-        end = start + len(aspect)
-        validated.append(ValidatedAspect(aspect=aspect, sentiment=sentiment, start=start, end=end))
+        start, end = span
+        used.add(start)
+        validated.append(
+            ValidatedAspect(aspect=review[start:end], sentiment=sentiment, start=start, end=end)
+        )
         rep.valid_count += 1
 
     return validated
 
 
-def _attempt_generate(
-    generate_fn: Callable[[], list[dict[str, str]]],
+TRANSIENT_ERRORS: tuple[type[Exception], ...] = (LLMClientError, OSError)
+
+
+def _attempt(
+    generate_fn: Callable[[], list[dict[str, str]]], retry_on: tuple[type[Exception], ...]
 ) -> tuple[list[dict[str, str]] | None, Exception | None]:
-    """Execute a single attempt of generation catching exceptions."""
+    """Run one attempt; return ``(result, None)`` or ``(None, error)`` for a retryable error."""
     try:
         return generate_fn(), None
-    except Exception as err:  # noqa: BLE001
+    except retry_on as err:
+        if isinstance(err, LLMClientError) and not err.retryable:
+            raise
         return None, err
 
 
@@ -100,21 +133,33 @@ def retry_llm_inference(
     generate_fn: Callable[[], list[dict[str, str]]],
     max_retries: int = 3,
     report: ValidationReport | None = None,
+    retry_on: tuple[type[Exception], ...] = TRANSIENT_ERRORS,
 ) -> list[dict[str, str]]:
-    """Execute LLM generation function with bounded retries on failure."""
+    """Run ``generate_fn``, retrying only errors listed in ``retry_on``.
+
+    Network and service failures (``LLMClientError`` marked retryable, ``OSError`` and its
+    subclasses such as ``ConnectionError`` and ``TimeoutError``) are retried up to
+    ``max_retries`` attempts in total. Any other exception, such as a parse error, a rejected
+    request (``LLMClientError`` with ``retryable=False``), ``NotImplementedError`` or another
+    programming mistake, is raised immediately, because repeating it cannot help. There is
+    no delay between attempts. ``report.retries_used`` counts the retries actually made.
+
+    Raises:
+        ValueError: If ``max_retries`` is less than 1.
+        RuntimeError: If every attempt failed with a retryable error.
+    """
+    if max_retries < 1:
+        raise ValueError(f"max_retries must be at least 1, got {max_retries}")
     rep = report if report is not None else ValidationReport()
     last_err: Exception | None = None
-
-    for attempt in range(max_retries):
-        result, err = _attempt_generate(generate_fn)
-        if err is None and result is not None:
+    for attempt in range(1, max_retries + 1):
+        result, err = _attempt(generate_fn, retry_on)
+        if result is not None:
             return result
         last_err = err
-        rep.retries_used += 1
-        rep.errors.append(f"Attempt {attempt + 1} failed: {err}")
-
-    if last_err:
-        raise RuntimeError(
-            f"LLM generation failed after {max_retries} attempts: {last_err}"
-        ) from last_err
-    return []
+        if attempt < max_retries:
+            rep.retries_used += 1
+        rep.errors.append(f"Attempt {attempt} failed: {err}")
+    raise RuntimeError(
+        f"LLM generation failed after {max_retries} attempts: {last_err}"
+    ) from last_err
