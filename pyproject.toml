@@ -13,6 +13,9 @@ requires-python = ">=3.10"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"absa.extraction" = ["prompt_files/*/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
