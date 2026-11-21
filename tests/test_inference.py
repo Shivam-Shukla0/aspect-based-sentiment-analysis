@@ -141,3 +141,48 @@ def test_duplicate_registration_is_rejected_unless_replaced() -> None:
 
     register_predictor("X", OtherPredictor, replace=True)
     assert type(get_predictor("x")) is OtherPredictor
+
+
+class _RaisingPredictor:
+    def predict(self, review: str) -> PredictionRecord:
+        raise RuntimeError(f"model crashed on {review!r}")
+
+    def predict_aspect(self, review: str, aspect: str) -> str:
+        del review, aspect
+        return "positive"
+
+
+class _FixedPredictor:
+    def __init__(self, record: PredictionRecord) -> None:
+        self._record = record
+
+    def predict(self, review: str) -> PredictionRecord:
+        del review
+        return self._record
+
+    def predict_aspect(self, review: str, aspect: str) -> str:
+        del review, aspect
+        return "positive"
+
+
+def test_predict_validated_wraps_unexpected_backend_errors() -> None:
+    with pytest.raises(interface.InferenceError, match="Prediction failed") as info:
+        interface.predict_validated(_RaisingPredictor(), "ok")
+    assert isinstance(info.value.__cause__, RuntimeError)
+
+
+@pytest.mark.parametrize("review", ["", "   "])
+def test_predict_validated_reports_an_empty_input_as_bad_input(review: str) -> None:
+    with pytest.raises(interface.InferenceError, match="input review"):
+        interface.predict_validated(_RaisingPredictor(), review)
+
+
+def test_predict_validated_rejects_a_record_for_a_different_review() -> None:
+    other = PredictionRecord("some other text", ())
+    with pytest.raises(interface.PredictionValidationError, match="differs"):
+        interface.predict_validated(_FixedPredictor(other), "the real review")
+
+
+def test_predict_validated_accepts_a_matching_record() -> None:
+    record = PredictionRecord("The battery is weak.", (AspectPrediction("battery", "negative"),))
+    assert interface.predict_validated(_FixedPredictor(record), "The battery is weak.") == record

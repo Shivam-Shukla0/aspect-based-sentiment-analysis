@@ -144,13 +144,7 @@ def build_bio_example(
 
     The tags are on regex tokens (words and punctuation), not on BERT word pieces. The
     aspect extractor (issue #31) must re-align them to word pieces before training.
-
-    Raises:
-        ValueError: If a span ends after the end of ``text`` or is otherwise invalid.
     """
-    for start, end in aspect_spans:
-        if end > len(text):
-            raise ValueError(f"aspect span ({start}, {end}) ends after the text ({len(text)})")
     token_spans = tokenize_with_offsets(text)
     tags = align_bio_tags(token_spans, aspect_spans)
     tag_ids = [TAG_TO_ID[t] for t in tags]

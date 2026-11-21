@@ -72,28 +72,6 @@ ignore_missing_imports = true
 module = ["sklearn.*", "lxml.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = ["torch.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# AspectDataset/LstmEncoder/AspectAttention subclass torch's Dataset/
-# Module; when torch is genuinely absent (ignore_missing_imports above
-# treats it as Any) strict mode's disallow_subclassing_any would
-# otherwise reject that, even though the subclass is fully typed
-# whenever torch is actually installed.
-module = ["absa.models.lstm_dataset", "absa.models.lstm_attention"]
-disallow_subclassing_any = false
-
-[[tool.mypy.overrides]]
-# Tensor.backward() lacks a full stub, needing a scoped type: ignore
-# when torch is actually installed; when torch is genuinely absent
-# (ignore_missing_imports above) that same call resolves to Any and the
-# ignore becomes "unused" instead, which strict mode would otherwise
-# flag as an error purely because of which environment mypy ran in.
-module = ["absa.models.lstm_training"]
-warn_unused_ignores = false
-
 [tool.codespell]
 skip = "./.git,./.venv"
 
