@@ -11,6 +11,7 @@ from absa.inference import interface
 from absa.inference.interface import (
     AspectPrediction,
     CheckpointNotFoundError,
+    DuplicateModelError,
     ModelNotFoundError,
     PredictionRecord,
     PredictionValidationError,
@@ -126,3 +127,17 @@ def test_require_checkpoint(tmp_path: Path) -> None:
         require_checkpoint(checkpoint)
     checkpoint.write_bytes(b"")
     assert require_checkpoint(str(checkpoint)) == checkpoint
+
+
+def test_duplicate_registration_is_rejected_unless_replaced() -> None:
+    class OtherPredictor(DummyStubPredictor):
+        pass
+
+    register_predictor("x", DummyStubPredictor)
+    with pytest.raises(DuplicateModelError, match="already registered"):
+        register_predictor("X", OtherPredictor)
+    assert isinstance(get_predictor("x"), DummyStubPredictor)
+    assert type(get_predictor("x")) is DummyStubPredictor
+
+    register_predictor("X", OtherPredictor, replace=True)
+    assert type(get_predictor("x")) is OtherPredictor
