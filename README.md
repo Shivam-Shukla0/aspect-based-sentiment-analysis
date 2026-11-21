@@ -43,7 +43,7 @@ The training code uses a CUDA GPU when one is available, so the notebooks are th
 | [03_bert_classification](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/03_bert_classification.ipynb) | fine-tune and evaluate BERT, confusion matrices |
 | [04_llm_prompting](https://colab.research.google.com/github/Shivam-Shukla0/aspect-based-sentiment-analysis/blob/main/notebooks/04_llm_prompting.ipynb)             | prompts, parsing and validation (no benchmark)  |
 
-Each notebook clones the repository, installs the requirements, checks that a GPU is visible and runs the same scripts described below. Notebooks are committed with their outputs cleared.
+Each notebook clones the repository, installs the requirements, checks that a GPU is visible and runs the same scripts described below. The committed notebooks keep the outputs of a run on a Colab GPU, so the results can be read without re-running them.
 
 ## Local setup
 
@@ -119,7 +119,7 @@ src/absa/            installable package
   inference/           common predictor interface and registry
 scripts/             command line entry points and CI tooling
 app/                 Flask backend and demo page (see app/README.md)
-notebooks/           Colab notebooks (outputs cleared)
+notebooks/           Colab notebooks (with the outputs of a GPU run)
 tests/               offline test suite on synthetic records
 docs/                architecture, annotation format, model notes
 reports/             technical report (LaTeX)
