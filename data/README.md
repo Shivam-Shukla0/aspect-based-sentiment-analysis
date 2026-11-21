@@ -73,7 +73,7 @@ One JSON object per sentence, for aspect extraction:
   "text": "The battery is weak but the screen is excellent.",
   "spans": [
     { "term": "battery", "start": 4, "end": 11, "polarity": "negative" },
-    { "term": "screen", "start": 32, "end": 38, "polarity": "positive" }
+    { "term": "screen", "start": 28, "end": 34, "polarity": "positive" }
   ]
 }
 ```
