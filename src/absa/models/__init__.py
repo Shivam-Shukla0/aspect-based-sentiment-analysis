@@ -30,6 +30,16 @@ from absa.models.lstm_tokens import (
 )
 
 if TYPE_CHECKING:
+    from absa.models.bert_classifier import (
+        BertConfig,
+        BertEpoch,
+        BertResult,
+        evaluate_bert_test,
+        load_bert,
+        predict_bert,
+        run_bert_training,
+        train_bert,
+    )
     from absa.models.lstm_attention import (
         AbsaLstmModel,
         AspectAttention,
@@ -62,6 +72,9 @@ __all__ = [
     "AbsaLstmModel",
     "AspectAttention",
     "AspectDataset",
+    "BertConfig",
+    "BertEpoch",
+    "BertResult",
     "EpochMetrics",
     "ErrorAnalysis",
     "HttpLLMClient",
@@ -79,22 +92,35 @@ __all__ = [
     "analyze_errors",
     "build_embedding",
     "collate",
+    "evaluate_bert_test",
     "evaluate_test_set",
+    "load_bert",
     "load_checkpoint",
     "make_dataloader",
     "masked_mean",
     "pad_or_truncate",
     "parse_llm_json",
     "predict",
+    "predict_bert",
     "retry_llm_inference",
+    "run_bert_training",
     "run_training",
     "save_checkpoint",
     "tokenize",
     "train",
+    "train_bert",
     "validate_aspect_predictions",
 ]
 
 _LAZY = {
+    "BertConfig": "absa.models.bert_classifier",
+    "BertEpoch": "absa.models.bert_classifier",
+    "BertResult": "absa.models.bert_classifier",
+    "evaluate_bert_test": "absa.models.bert_classifier",
+    "load_bert": "absa.models.bert_classifier",
+    "predict_bert": "absa.models.bert_classifier",
+    "run_bert_training": "absa.models.bert_classifier",
+    "train_bert": "absa.models.bert_classifier",
     "AbsaLstmModel": "absa.models.lstm_attention",
     "AspectAttention": "absa.models.lstm_attention",
     "AspectDataset": "absa.models.lstm_dataset",
