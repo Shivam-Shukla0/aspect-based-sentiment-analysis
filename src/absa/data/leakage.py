@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 
 
-def _normalise(text: str) -> str:
+def normalise_review(text: str) -> str:
+    """Lowercase ``text`` and collapse whitespace, the key used to compare reviews."""
     return " ".join(text.lower().split())
 
 
@@ -16,8 +17,8 @@ def find_overlap(
 
     Aspect-level records share a review, so overlap is judged on the review text.
     """
-    train_reviews = {_normalise(str(record["review"])) for record in train}
-    test_reviews = {_normalise(str(record["review"])) for record in test}
+    train_reviews = {normalise_review(str(record["review"])) for record in train}
+    test_reviews = {normalise_review(str(record["review"])) for record in test}
     return train_reviews & test_reviews
 
 

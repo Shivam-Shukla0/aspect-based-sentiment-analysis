@@ -57,6 +57,7 @@ max-statements = 40
 "tests/*" = ["S101", "PLR2004", "D", "SLF001", "INP001"]
 "scripts/__init__.py" = ["D104"]
 "scripts/*" = ["T201", "S603", "S607"]
+"notebooks/*" = ["T201", "D100", "INP001"]
 
 [tool.mypy]
 strict = true
@@ -68,7 +69,7 @@ module = ["nbformat.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*"]
+module = ["sklearn.*", "lxml.*"]
 ignore_missing_imports = true
 
 [tool.codespell]
