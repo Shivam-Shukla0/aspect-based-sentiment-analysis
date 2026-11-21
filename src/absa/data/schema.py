@@ -50,13 +50,14 @@ class AspectSpan:
     polarity: str
 
     def __post_init__(self) -> None:
-        """Reject spans with an empty term or offsets that cannot bound it."""
+        """Reject spans with an empty term, bad offsets, or an invalid polarity."""
         if not self.term.strip():
             raise ValueError("span term must be a non-empty string")
         if self.start < 0 or self.end <= self.start:
             raise ValueError(
                 f"span offsets must satisfy 0 <= start < end, got {self.start}:{self.end}"
             )
+        _require_label(self.polarity, SENTIMENT_LABELS)
 
 
 @dataclass(frozen=True, slots=True)
