@@ -25,7 +25,7 @@ CONFIG = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_
 
 @pytest.fixture
 def checkpoint_and_test_file(tmp_path: Path) -> tuple[Path, Path]:
-    model, vocab, _ = train(RECORDS, RECORDS[:1], CONFIG)
+    model, vocab, _, _ = train(RECORDS, RECORDS[:1], CONFIG)
     checkpoint_path = tmp_path / "model.pt"
     save_checkpoint(checkpoint_path, model, vocab, CONFIG)
     test_file = tmp_path / "test.jsonl"

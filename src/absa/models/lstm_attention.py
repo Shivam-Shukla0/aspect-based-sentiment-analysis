@@ -164,14 +164,15 @@ class AbsaLstmModel(nn.Module):
         inside the method) so the default is not evaluated once at import time.
         """
         super().__init__()
-        self.config = config if config is not None else ModelConfig()
-        self.embedding = build_embedding(vocab_size, config.embedding_dim, pad_id)
+        resolved_config = config if config is not None else ModelConfig()
+        self.config = resolved_config
+        self.embedding = build_embedding(vocab_size, resolved_config.embedding_dim, pad_id)
         self.encoder = LstmEncoder(
-            config.embedding_dim,
-            config.hidden_size,
-            config.num_layers,
-            config.dropout,
-            bidirectional=config.bidirectional,
+            resolved_config.embedding_dim,
+            resolved_config.hidden_size,
+            resolved_config.num_layers,
+            resolved_config.dropout,
+            bidirectional=resolved_config.bidirectional,
         )
         self.attention = AspectAttention(self.encoder.output_size, num_classes)
 

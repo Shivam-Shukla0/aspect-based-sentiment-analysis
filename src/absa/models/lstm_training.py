@@ -143,13 +143,15 @@ def train(
     train_records: Sequence[Mapping[str, object]],
     val_records: Sequence[Mapping[str, object]],
     config: LstmConfig,
-) -> tuple[AbsaLstmModel, Vocabulary, tuple[EpochMetrics, ...]]:
+) -> tuple[AbsaLstmModel, Vocabulary, tuple[EpochMetrics, ...], dict[str, Tensor] | None]:
     """Train on ``train_records``, validating on ``val_records`` each epoch.
 
     Seeds every random number generator before building the model or
     dataloaders, so a given ``config.seed`` reproduces the same first
-    epoch's training loss. Returns the final model, its vocabulary
-    (built from ``train_records`` only) and the per-epoch history.
+    epoch's training loss. Returns the model with the best validation
+    macro F1 (the earliest such epoch on a tie), its vocabulary
+    (built from ``train_records`` only), the per-epoch history, and
+    the best epoch's state dict (or ``None`` if no epochs ran).
     """
     set_seed(config.seed)
     vocab = Vocabulary.build([str(r["review"]) for r in train_records], min_freq=config.min_freq)

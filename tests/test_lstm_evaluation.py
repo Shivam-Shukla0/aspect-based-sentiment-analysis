@@ -32,7 +32,7 @@ CONFIG = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_
 
 
 def _trained_model() -> tuple[AbsaLstmModel, Vocabulary]:
-    model, vocab, _ = train(TRAIN_RECORDS, TRAIN_RECORDS[:2], CONFIG)
+    model, vocab, _, _ = train(TRAIN_RECORDS, TRAIN_RECORDS[:2], CONFIG)
     return model, vocab
 
 
