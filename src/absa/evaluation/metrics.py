@@ -14,8 +14,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from sklearn.metrics import accuracy_score, classification_report, precision_recall_fscore_support
-
 from absa.config import SENTIMENT_LABELS
 
 
@@ -76,8 +74,15 @@ def evaluate(
     scored; a sample whose gold or predicted label is outside ``labels`` is
     not counted toward any class's precision or recall, but still counts
     toward accuracy. Classes with no true or no predicted examples score
-    zero rather than raising or warning.
+    zero rather than raising or warning. scikit-learn is imported here, not at
+    module level, so importing this package does not require it.
     """
+    from sklearn.metrics import (  # noqa: PLC0415  (optional dependency, see docstring)
+        accuracy_score,
+        classification_report,
+        precision_recall_fscore_support,
+    )
+
     if len(y_true) != len(y_pred):
         raise ValueError(
             f"y_true and y_pred must have the same length: {len(y_true)} != {len(y_pred)}"
