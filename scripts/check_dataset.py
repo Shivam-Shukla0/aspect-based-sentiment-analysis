@@ -30,9 +30,17 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-def check(raw_dir: Path = DATA_RAW_DIR, manifest: Mapping[str, str] = MANIFEST) -> list[str]:
-    """Return one error message per missing or modified file listed in ``manifest``."""
-    errors = []
+def check(
+    raw_dir: Path = DATA_RAW_DIR, manifest: Mapping[str, str] = MANIFEST
+) -> tuple[list[str], list[str]]:
+    """Return (errors, warnings) for files in ``raw_dir`` against ``manifest``.
+
+    Errors are missing or checksum-mismatched manifest entries. Warnings cover
+    files present in ``raw_dir`` that are not listed in the manifest, so an
+    unexpected or renamed file is not silently ignored.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
     for name, expected in manifest.items():
         path = raw_dir / name
         if not path.is_file():
@@ -41,14 +49,25 @@ def check(raw_dir: Path = DATA_RAW_DIR, manifest: Mapping[str, str] = MANIFEST) 
         actual = sha256_of(path)
         if actual != expected:
             errors.append(f"{name}: checksum mismatch (expected {expected}, got {actual})")
-    return errors
+
+    if raw_dir.is_dir():
+        manifest_names = set(manifest)
+        warnings.extend(
+            f"{path.name}: present in {raw_dir} but not in the manifest"
+            for path in sorted(raw_dir.iterdir())
+            if path.is_file() and path.name not in manifest_names
+        )
+
+    return errors, warnings
 
 
 def main() -> int:  # pragma: no cover
     """Print any checksum problems found in ``data/raw/`` and return the exit code."""
-    errors = check()
+    errors, warnings = check()
     for error in errors:
         print(error, file=sys.stderr)
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     if not errors:
         print(f"ok: {len(MANIFEST)} file(s) verified")
     return 1 if errors else 0
