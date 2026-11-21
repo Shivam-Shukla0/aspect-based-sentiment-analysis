@@ -1,6 +1,6 @@
 # Demo and reproducibility guide
 
-How to reproduce the results, run the demo and answer the questions a reviewer is likely to ask. Every figure quoted in the slides comes from the technical report ([reports/report.tex](../reports/report.tex)) and from the result files the commands below write.
+How to reproduce the results, run the demo and answer the questions a reviewer is likely to ask. The slides are in [reports/slides.pptx](../reports/slides.pptx). Every figure quoted in them comes from the technical report ([reports/report.tex](../reports/report.tex)) and from the result files the commands below write.
 
 ## 1. Set up
 
