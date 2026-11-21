@@ -105,7 +105,7 @@ echo '{"review": "The battery is weak.", "aspect": "battery", "sentiment": "nega
 
 ## Results
 
-Results, per-class tables, the error analysis and their limitations are in the technical report, [reports/report.tex](reports/report.tex), written for the _Natural Language Engineering_ journal class (see [reports/README.md](reports/README.md) for how to build it). Figures are not repeated here so that there is one authoritative source. The report states plainly that results come from one run per setting and from a copy of the dataset that did not come through the official Metashare route, and they should be re-run on the official files before being quoted elsewhere.
+The slides are in [reports/slides.pptx](reports/slides.pptx) and the reproduction and demo script in [docs/demo-guide.md](docs/demo-guide.md). Results, per-class tables, the error analysis and their limitations are in the technical report, [reports/report.tex](reports/report.tex), written for the _Natural Language Engineering_ journal class (see [reports/README.md](reports/README.md) for how to build it). Figures are not repeated here so that there is one authoritative source. The report states plainly that results come from one run per setting and from a copy of the dataset that did not come through the official Metashare route, and they should be re-run on the official files before being quoted elsewhere.
 
 ## Repository layout
 
