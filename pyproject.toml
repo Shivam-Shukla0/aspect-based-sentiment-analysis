@@ -64,6 +64,10 @@ warn_unreachable = true
 module = ["nbformat.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["sklearn.*"]
+ignore_missing_imports = true
+
 [tool.codespell]
 skip = "./.git,./.venv"
 
