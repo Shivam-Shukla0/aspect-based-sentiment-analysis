@@ -60,7 +60,33 @@ Let me know if you need anything else!"""
 
 def test_parse_llm_json_empty_array() -> None:
     assert parse_llm_json("[]") == []
-    assert parse_llm_json("") == []
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "\n\t \n"])
+def test_parse_llm_json_empty_response_is_an_error(raw: str) -> None:
+    with pytest.raises(ValueError, match="Empty response"):
+        parse_llm_json(raw)
+
+
+@pytest.mark.parametrize(
+    ("raw", "field"),
+    [
+        ('[{"aspect": null, "sentiment": "positive"}]', "aspect"),
+        ('[{"aspect": "price", "sentiment": null}]', "sentiment"),
+        (
+            '[{"aspect": "ok", "sentiment": "positive"}, {"aspect": null, "sentiment": null}]',
+            "aspect",
+        ),
+    ],
+)
+def test_parse_llm_json_rejects_null_fields(raw: str, field: str) -> None:
+    with pytest.raises(ValueError, match=f"'{field}' must not be null"):
+        parse_llm_json(raw)
+
+
+def test_parse_llm_json_first_array_wins() -> None:
+    raw = '[] and then [{"aspect": "price", "sentiment": "negative"}]'
+    assert parse_llm_json(raw) == []
 
 
 def test_parse_llm_json_malformed() -> None:
