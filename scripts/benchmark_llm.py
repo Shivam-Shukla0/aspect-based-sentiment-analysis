@@ -104,7 +104,7 @@ def score(sentences: Sequence[Sentence], answers: Sequence[Answer]) -> dict[str,
         "end_to_end": end_to_end.to_dict(),
         "error_counts": report["error_counts"],
         "error_examples": report["error_examples"],
-        "unparseable_answers": sum(a.parse_failed for a in answers),
+        "unparsable_answers": sum(a.parse_failed for a in answers),
         "invalid_aspects": sum(a.invalid_aspects for a in answers),
         "mean_latency_seconds": sum(latencies) / len(latencies) if latencies else 0.0,
         "median_latency_seconds": latencies[len(latencies) // 2] if latencies else 0.0,
@@ -182,7 +182,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         f"{args.domain}: extraction F1 {summary['extraction_exact']['f1']:.4f}, "
         f"end-to-end F1 {summary['end_to_end']['f1']:.4f}, "
-        f"unparseable {summary['unparseable_answers']}"
+        f"unparsable {summary['unparsable_answers']}"
     )
     return 0
 

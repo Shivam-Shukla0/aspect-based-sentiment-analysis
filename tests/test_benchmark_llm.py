@@ -29,13 +29,13 @@ def test_perfect_answers_score_one_and_empty_list_means_no_aspects() -> None:
     client = _generate([GOOD, "[]", '[{"aspect": "Fast boot", "sentiment": "positive"}]'])
     answers = bench.collect_answers(SENTENCES, client, lambda review: review, batch_size=2)
     result = bench.score(SENTENCES, answers)
-    assert result["unparseable_answers"] == 0
+    assert result["unparsable_answers"] == 0
     assert result["extraction_exact"]["tp"] == 3  # type: ignore[index]
     assert result["end_to_end"]["tp"] == 3  # type: ignore[index]
     assert result["error_counts"] == {"boundary": 0, "missed": 1, "spurious": 0}
 
 
-def test_unparseable_and_invalid_answers_are_counted_not_hidden() -> None:
+def test_unparsable_and_invalid_answers_are_counted_not_hidden() -> None:
     bad_label = (
         '[{"aspect": "screen", "sentiment": "amazing"},'
         ' {"aspect": "ghost", "sentiment": "positive"}]'
@@ -43,7 +43,7 @@ def test_unparseable_and_invalid_answers_are_counted_not_hidden() -> None:
     client = _generate(["I cannot help with that.", bad_label, "[]"])
     answers = bench.collect_answers(SENTENCES, client, lambda review: review, batch_size=3)
     result = bench.score(SENTENCES, answers)
-    assert result["unparseable_answers"] == 1
+    assert result["unparsable_answers"] == 1
     assert result["invalid_aspects"] == 2
     assert result["end_to_end"]["tp"] == 0  # type: ignore[index]
     assert result["extraction_exact"]["fn"] == 4  # type: ignore[index]
