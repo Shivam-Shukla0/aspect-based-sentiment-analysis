@@ -53,3 +53,11 @@ def test_evaluate_extraction_spans_empty() -> None:
     assert metrics.precision == 0.0
     assert metrics.recall == 0.0
     assert metrics.f1 == 0.0
+
+
+def test_overlap_matching_is_greedy_in_prediction_order() -> None:
+    gold = [(0, 10), (8, 20)]
+    both = (9, 10)  # overlaps both gold spans; greedy takes the first
+    only_first = (0, 5)  # overlaps only the first gold span
+    assert compute_span_counts(gold, [both, only_first], exact_match=False) == (1, 1, 1)
+    assert compute_span_counts(gold, [only_first, both], exact_match=False) == (2, 0, 0)
