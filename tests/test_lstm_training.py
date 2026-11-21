@@ -8,6 +8,8 @@ pytest.importorskip("sklearn")
 import torch
 
 from absa.models import LstmConfig, load_checkpoint, run_training, save_checkpoint, train
+from absa.models.lstm_attention import resolve_device
+from absa.models.lstm_evaluation import predict
 from absa.models.lstm_training import _class_weights
 
 
@@ -172,3 +174,31 @@ def test_training_with_class_weighting_runs_and_is_logged(tmp_path: Path) -> Non
     log = json.loads((tmp_path / "lstm_training_log.json").read_text(encoding="utf-8"))
     assert log["config"]["class_weighting"] is True
     assert len(result.history) == 2
+
+
+def test_resolve_device_accepts_cpu_and_auto() -> None:
+    assert resolve_device("cpu").type == "cpu"
+    assert resolve_device("auto").type in {"cpu", "cuda"}
+
+
+@pytest.mark.skipif(torch.cuda.is_available(), reason="only meaningful without CUDA")
+def test_cuda_request_without_cuda_is_rejected() -> None:
+    with pytest.raises(ValueError, match="CUDA is not available"):
+        resolve_device("cuda")
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")
+def test_training_and_prediction_run_on_the_gpu(tmp_path: Path) -> None:
+    config = LstmConfig(
+        embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_fraction=0.3, device="cuda"
+    )
+    records = _records_with_ids(RECORDS)
+    model, vocab, _ = train(records[:7], records[7:], config)
+    assert next(model.parameters()).device.type == "cuda"
+
+    result = run_training(records, config, output_dir=tmp_path)
+    loaded, loaded_vocab = load_checkpoint(result.checkpoint_path)
+    assert next(loaded.parameters()).device.type == "cpu"
+    assert len(predict(loaded, loaded_vocab, records, device="cuda")) == len(records)
+    assert next(loaded.parameters()).device.type == "cuda"
+    del vocab

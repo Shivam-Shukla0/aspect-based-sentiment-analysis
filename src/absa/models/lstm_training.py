@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from absa.config import OUTPUTS_DIR, RANDOM_SEED, SENTIMENT_LABELS
 from absa.data import split_train_val
 from absa.evaluation import evaluate
-from absa.models.lstm_attention import AbsaLstmModel, ModelConfig
+from absa.models.lstm_attention import AbsaLstmModel, ModelConfig, resolve_device
 from absa.models.lstm_dataset import AspectDataset, make_dataloader
 from absa.models.lstm_tokens import Vocabulary
 from absa.reproducibility import set_seed
@@ -33,7 +33,8 @@ class LstmConfig:
     trains with the plain cross-entropy loss. ``True`` weights each class in the training
     loss by ``total / (classes_present * class_count)``, so rare classes count more; classes
     with no training example get weight 0. Validation loss is never weighted, so it stays
-    comparable between runs.
+    comparable between runs. ``device`` is ``auto`` (CUDA when available, else CPU), ``cpu``
+    or ``cuda``.
     """
 
     embedding_dim: int = 50
@@ -48,6 +49,7 @@ class LstmConfig:
     val_fraction: float = 0.2
     seed: int = RANDOM_SEED
     class_weighting: bool = False
+    device: str = "auto"
 
     @property
     def model_config(self) -> ModelConfig:
@@ -99,7 +101,7 @@ def save_checkpoint(
 
 def load_checkpoint(path: Path) -> tuple[AbsaLstmModel, Vocabulary]:
     """Load a checkpoint written by ``save_checkpoint``, returning ``(model, vocab)``."""
-    checkpoint = torch.load(path, weights_only=True)
+    checkpoint = torch.load(path, weights_only=True, map_location="cpu")
     vocab = Vocabulary(checkpoint["vocab_tokens"])
     config = LstmConfig(**checkpoint["config"])
     model = AbsaLstmModel(
@@ -127,6 +129,7 @@ def _run_epoch(
     loader: DataLoader[dict[str, Tensor]],
     optimizer: torch.optim.Optimizer | None,
     class_weights: Tensor | None = None,
+    device: torch.device | None = None,
 ) -> tuple[float, list[str], list[str]]:
     """Run one pass over ``loader``; trains if ``optimizer`` is given, else evaluates.
 
@@ -139,7 +142,8 @@ def _run_epoch(
     num_batches = 0
     y_true: list[str] = []
     y_pred: list[str] = []
-    for batch in loader:
+    for cpu_batch in loader:
+        batch = {key: value.to(device) for key, value in cpu_batch.items()}
         with torch.set_grad_enabled(optimizer is not None):
             logits: Tensor
             logits, _ = model(
@@ -176,13 +180,14 @@ def train(
     ``train_records`` only) and the per-epoch history.
     """
     set_seed(config.seed)
+    device = resolve_device(config.device)
     vocab = Vocabulary.build([str(r["review"]) for r in train_records], min_freq=config.min_freq)
     model = AbsaLstmModel(
         vocab_size=len(vocab),
         pad_id=vocab.pad_id,
         num_classes=len(SENTIMENT_LABELS),
         config=config.model_config,
-    )
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     train_loader = make_dataloader(
         AspectDataset(train_records, vocab),
@@ -193,13 +198,13 @@ def train(
     )
     val_loader = make_dataloader(AspectDataset(val_records, vocab), vocab.pad_id, config.batch_size)
 
-    weights = _class_weights(train_records) if config.class_weighting else None
+    weights = _class_weights(train_records).to(device) if config.class_weighting else None
     history = []
     best_f1 = float("-inf")
     best_state: dict[str, Tensor] = {}
     for epoch in range(1, config.epochs + 1):
-        train_loss, _, _ = _run_epoch(model, train_loader, optimizer, weights)
-        val_loss, val_true, val_pred = _run_epoch(model, val_loader, None)
+        train_loss, _, _ = _run_epoch(model, train_loader, optimizer, weights, device)
+        val_loss, val_true, val_pred = _run_epoch(model, val_loader, None, None, device)
         val_macro_f1 = evaluate(val_true, val_pred, labels=SENTIMENT_LABELS).macro_f1
         history.append(EpochMetrics(epoch, train_loss, val_loss, val_macro_f1))
         if val_macro_f1 > best_f1:

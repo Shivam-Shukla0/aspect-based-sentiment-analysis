@@ -131,6 +131,20 @@ class AspectAttention(nn.Module):
         return logits, weights
 
 
+def resolve_device(name: str = "auto") -> torch.device:
+    """Return the torch device for ``name``: ``auto`` picks CUDA when it is available.
+
+    Raises:
+        ValueError: If ``name`` asks for CUDA but no CUDA device is available.
+    """
+    if name == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(name)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError(f"device {name!r} was requested but CUDA is not available")
+    return device
+
+
 @dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Architecture hyperparameters for ``AbsaLstmModel``."""
