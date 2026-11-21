@@ -88,12 +88,14 @@ def evaluate(
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=labels, zero_division=0
     )
-    macro_f1 = precision_recall_fscore_support(
-        y_true, y_pred, labels=labels, average="macro", zero_division=0
-    )[2]
-    micro_f1 = precision_recall_fscore_support(
-        y_true, y_pred, labels=labels, average="micro", zero_division=0
-    )[2]
+    # One per-class call feeds both the per-class breakdown and macro F1;
+    # micro F1 is a single scalar call.
+    macro_f1 = sum(float(value) for value in f1) / len(f1) if len(f1) else 0.0
+    micro_f1 = float(
+        precision_recall_fscore_support(
+            y_true, y_pred, labels=labels, average="micro", zero_division=0
+        )[2]
+    )
     per_class = tuple(
         ClassMetrics(
             label=label,
