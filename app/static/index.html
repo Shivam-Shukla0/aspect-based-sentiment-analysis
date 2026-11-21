@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Aspect-based sentiment analysis</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <main>
+            <h1>Aspect-based sentiment analysis</h1>
+            <p class="intro">
+                Enter a laptop or restaurant review. Each selected model lists the aspects it finds
+                and the sentiment it assigns to each.
+            </p>
+
+            <form id="review-form" novalidate>
+                <label for="review">Review</label>
+                <textarea id="review" name="review" rows="5" maxlength="2000" required></textarea>
+
+                <fieldset id="model-selector">
+                    <legend>Models</legend>
+                    <label><input type="checkbox" name="model" value="lstm" checked /> LSTM</label>
+                    <label><input type="checkbox" name="model" value="bert" /> BERT</label>
+                    <label><input type="checkbox" name="model" value="llm" /> LLM</label>
+                </fieldset>
+
+                <button type="submit" id="submit">Analyse</button>
+            </form>
+
+            <p id="status" role="status" aria-live="polite"></p>
+            <section id="results" aria-live="polite"></section>
+        </main>
+        <script src="app.js"></script>
+    </body>
+</html>

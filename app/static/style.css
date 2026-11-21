@@ -1,0 +1,134 @@
+:root {
+    --bg: #f7f7f9;
+    --fg: #1c1c1e;
+    --card: #ffffff;
+    --border: #d0d0d8;
+    --accent: #2456c5;
+    --positive: #1b7a3d;
+    --negative: #b3261e;
+    --neutral: #5f6368;
+    --conflict: #9a5b00;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, sans-serif;
+    line-height: 1.5;
+}
+
+main {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+textarea {
+    display: block;
+    width: 100%;
+    padding: 0.5rem;
+    font: inherit;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+fieldset {
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+fieldset label {
+    display: inline-block;
+    margin-right: 1rem;
+}
+
+button {
+    padding: 0.5rem 1.25rem;
+    font: inherit;
+    color: #ffffff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+#status.error,
+.model-error {
+    color: var(--negative);
+    font-weight: 600;
+}
+
+#results {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.model-card {
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.model-card h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+}
+
+.aspect-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.aspect-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.sentiment {
+    font-weight: 600;
+}
+
+.sentiment-positive {
+    color: var(--positive);
+}
+
+.sentiment-negative {
+    color: var(--negative);
+}
+
+.sentiment-neutral {
+    color: var(--neutral);
+}
+
+.sentiment-conflict {
+    color: var(--conflict);
+}
+
+@media (max-width: 30rem) {
+    main {
+        padding: 0.5rem;
+    }
+
+    button {
+        width: 100%;
+    }
+}
