@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
-import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Protocol
 
-JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\[.*?\])\s*```", re.DOTALL)
-JSON_ARRAY_RE = re.compile(r"\[\s*\{.*?\}\s*\]", re.DOTALL)
+from absa.models.llm_errors import LLMClientError
 
 
 class LLMClient(Protocol):
@@ -38,6 +38,10 @@ class MockLLMClient:
         return self.responses.get(prompt, self.default_response)
 
 
+_HTTP_TOO_MANY_REQUESTS = 429
+_HTTP_SERVER_ERROR = 500
+
+
 class HttpLLMClient:
     """HTTP client for API endpoints reading credentials from environment variables."""
 
@@ -48,10 +52,14 @@ class HttpLLMClient:
         api_base: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        """Initialize HTTP client configuration."""
-        self.model: str = model or os.getenv("LLM_MODEL") or "gpt-3.5-turbo"
+        """Initialize HTTP client configuration.
+
+        Model, API key and base URL have no vendor defaults: pass them explicitly or set
+        ``LLM_MODEL``, ``LLM_API_KEY`` and ``LLM_API_BASE``.
+        """
+        self.model: str = model or os.getenv("LLM_MODEL") or ""
         self.api_key: str = api_key or os.getenv("LLM_API_KEY") or ""
-        base = api_base or os.getenv("LLM_API_BASE") or "https://api.openai.com/v1"
+        base = api_base or os.getenv("LLM_API_BASE") or ""
         self.api_base: str = base.rstrip("/")
         self.timeout: float = timeout
 
@@ -60,11 +68,21 @@ class HttpLLMClient:
 
         Raises:
             ValueError: If no API key is configured.
-            RuntimeError: On a network error, a timeout or a response that is not valid
-                chat-completion JSON.
+            LLMClientError: On a network error, a timeout, an HTTP error, a response that is
+                not valid chat-completion JSON, or a reply without text. Its ``retryable``
+                flag tells a retry wrapper whether another attempt makes sense.
         """
         if not self.api_key:
             raise ValueError("LLM_API_KEY environment variable is not configured")
+        if not self.model:
+            raise ValueError("LLM_MODEL environment variable is not configured")
+        if not self.api_base:
+            raise ValueError("LLM_API_BASE environment variable is not configured")
+
+        parsed_base = urllib.parse.urlparse(self.api_base)
+        is_local = parsed_base.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed_base.scheme != "https" and not (parsed_base.scheme == "http" and is_local):
+            raise ValueError("LLM_API_BASE must use https (http is only allowed for localhost)")
 
         url = f"{self.api_base}/chat/completions"
         headers = {
@@ -80,46 +98,73 @@ class HttpLLMClient:
         ).encode("utf-8")
 
         req = urllib.request.Request(url, data=payload, headers=headers)  # noqa: S310
+        return self._send(req)
+
+    def _send(self, req: urllib.request.Request) -> str:
+        """Send ``req`` and return the reply text, raising ``LLMClientError`` on any failure."""
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
-                return str(data["choices"][0]["message"]["content"])
-        except (urllib.error.URLError, TimeoutError) as err:
-            raise RuntimeError(f"HTTP LLM generation failed: {err}") from err
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as err:
-            raise RuntimeError(f"HTTP LLM returned an unexpected response: {err!r}") from err
+            content = data["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as err:
+            retryable = err.code == _HTTP_TOO_MANY_REQUESTS or err.code >= _HTTP_SERVER_ERROR
+            raise LLMClientError(
+                f"HTTP LLM generation failed: status {err.code}", retryable=retryable
+            ) from err
+        except (OSError, http.client.HTTPException) as err:
+            raise LLMClientError(f"HTTP LLM generation failed: {err}") from err
+        except (ValueError, KeyError, IndexError, TypeError) as err:
+            raise LLMClientError(f"HTTP LLM returned an unexpected response: {err!r}") from err
+        if not isinstance(content, str):
+            raise LLMClientError("HTTP LLM returned no text content", retryable=False)
+        return content
 
 
 def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:
-    """Filter and type-cast list of objects into dicts with aspect and sentiment."""
-    return [
-        {
-            "aspect": str(item["aspect"]),
-            "sentiment": str(item["sentiment"]).lower().strip(),
-        }
-        for item in items
-        if isinstance(item, dict) and "aspect" in item and "sentiment" in item
-    ]
+    """Type-cast list of objects into dicts with aspect and sentiment.
+
+    Raises:
+        ValueError: If any item is not an object with both an ``aspect`` and a
+            ``sentiment`` key. Dropping such items silently would look like "no aspects".
+    """
+    parsed: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict) or "aspect" not in item or "sentiment" not in item:
+            raise ValueError(f"item must be an object with 'aspect' and 'sentiment': {item!r}")
+        parsed.append(
+            {
+                "aspect": str(item["aspect"]),
+                "sentiment": str(item["sentiment"]).lower().strip(),
+            }
+        )
+    return parsed
 
 
-def _extract_json_candidate(text: str) -> str | None:
-    """Attempt to locate a JSON array string within the text."""
-    if text.startswith("[") and text.endswith("]"):
-        return text
+def _find_json_array(text: str) -> list[object] | None:
+    """Return the first JSON array in ``text`` that is empty or made of objects.
 
-    fence_match = JSON_FENCE_RE.search(text)
-    if fence_match:
-        return fence_match.group(1).strip()
-
-    array_match = JSON_ARRAY_RE.search(text)
-    if array_match:
-        return array_match.group(0).strip()
-
+    Scans every ``[`` so that prose, code fences and empty arrays (``"Sure! []"``) work.
+    A single object that is not wrapped in an array is not accepted.
+    """
+    decoder = json.JSONDecoder()
+    for start, char in enumerate(text):
+        if char != "[":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, list) and all(isinstance(item, dict) for item in value):
+            return value
     return None
 
 
 def parse_llm_json(response: str) -> list[dict[str, str]]:
     """Extract and parse a JSON array of aspect-sentiment objects from raw LLM output.
+
+    The array may be surrounded by prose or a Markdown code fence, and ``[]`` is a valid
+    answer meaning that no aspects were found. A single JSON object that is not inside an
+    array is rejected.
 
     Args:
         response: Raw string completion from the language model.
@@ -128,19 +173,14 @@ def parse_llm_json(response: str) -> list[dict[str, str]]:
         List of parsed aspect-sentiment dictionaries.
 
     Raises:
-        ValueError: If no valid JSON array can be parsed.
+        ValueError: If no JSON array can be found, or an item lacks ``aspect`` or
+            ``sentiment``.
     """
     cleaned = response.strip()
     if not cleaned:
         return []
 
-    candidate = _extract_json_candidate(cleaned)
-    if candidate:
-        try:
-            parsed = json.loads(candidate)
-            if isinstance(parsed, list):
-                return _validate_raw_list(parsed)
-        except json.JSONDecodeError:
-            pass
-
-    raise ValueError(f"Could not parse valid JSON array from response: {cleaned[:100]!r}")
+    items = _find_json_array(cleaned)
+    if items is None:
+        raise ValueError(f"Could not parse valid JSON array from response: {cleaned[:100]!r}")
+    return _validate_raw_list(items)
