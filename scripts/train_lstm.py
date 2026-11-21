@@ -94,6 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for config, result in runs
         ],
         "chosen": asdict(best_config),
+        "checkpoint": str(best.checkpoint_path),
         "test_accuracy": report.metrics.accuracy,
         "test_macro_f1": report.metrics.macro_f1,
     }

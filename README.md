@@ -118,7 +118,7 @@ src/absa/            installable package
   evaluation/          shared precision/recall/F1, span and end-to-end evaluators
   inference/           common predictor interface and registry
 scripts/             command line entry points and CI tooling
-app/                 static demo page for per-aspect results
+app/                 Flask backend and demo page (see app/README.md)
 notebooks/           Colab notebooks (outputs cleared)
 tests/               offline test suite on synthetic records
 docs/                architecture, annotation format, model notes
@@ -144,7 +144,7 @@ CI runs on every pull request: lint and format, strict type checking, tests on P
 - Language-model prompting is not benchmarked: it needs a model endpoint and key that are not part of the repository.
 - The LSTM starts from random word vectors and is a baseline; BERT is the stronger model.
 - Single seed per setting; differences between near-identical settings are within what another seed could change.
-- A web back end for the demo page is not implemented; `app/` contains the static front end only.
+- The demo back end (`python -m app.server`) serves the trained classifiers for aspect terms the user supplies; it is a single-process demo server, not a production deployment.
 - No licence has been chosen. Until the team adds one, all rights are reserved by default.
 
 ## Contributing

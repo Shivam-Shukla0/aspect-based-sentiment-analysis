@@ -10,13 +10,18 @@
         <main>
             <h1>Aspect-based sentiment analysis</h1>
             <p class="intro">
-                Enter a laptop or restaurant review. Each selected model lists the aspects it finds
-                and the sentiment it assigns to each.
+                Enter a laptop or restaurant review and the aspect terms to classify. Each selected
+                model assigns a sentiment to each term.
             </p>
 
             <form id="review-form" novalidate>
                 <label for="review">Review</label>
                 <textarea id="review" name="review" rows="5" maxlength="2000" required></textarea>
+
+                <label for="aspects"
+                    >Aspect terms (comma separated, as written in the review)</label
+                >
+                <input id="aspects" name="aspects" type="text" maxlength="400" required />
 
                 <fieldset id="model-selector">
                     <legend>Models</legend>
