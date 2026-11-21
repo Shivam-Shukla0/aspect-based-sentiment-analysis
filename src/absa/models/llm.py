@@ -56,7 +56,13 @@ class HttpLLMClient:
         self.timeout: float = timeout
 
     def generate(self, prompt: str) -> str:
-        """Invoke API endpoint and return text content."""
+        """Invoke API endpoint and return text content.
+
+        Raises:
+            ValueError: If no API key is configured.
+            RuntimeError: On a network error, a timeout or a response that is not valid
+                chat-completion JSON.
+        """
         if not self.api_key:
             raise ValueError("LLM_API_KEY environment variable is not configured")
 
@@ -78,8 +84,10 @@ class HttpLLMClient:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
                 return str(data["choices"][0]["message"]["content"])
-        except urllib.error.URLError as err:
+        except (urllib.error.URLError, TimeoutError) as err:
             raise RuntimeError(f"HTTP LLM generation failed: {err}") from err
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as err:
+            raise RuntimeError(f"HTTP LLM returned an unexpected response: {err!r}") from err
 
 
 def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:

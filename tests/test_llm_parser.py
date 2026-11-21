@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import urllib.error
+
 import pytest
 
 from absa.models.llm import (
@@ -59,3 +61,52 @@ def test_parse_llm_json_empty_array() -> None:
 def test_parse_llm_json_malformed() -> None:
     with pytest.raises(ValueError, match="Could not parse valid JSON array"):
         parse_llm_json("I cannot identify any aspects in this review.")
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def _client_with_response(monkeypatch: pytest.MonkeyPatch, outcome: object) -> HttpLLMClient:
+    def fake_urlopen(request: object, timeout: float) -> _FakeResponse:
+        del request, timeout
+        if isinstance(outcome, Exception):
+            raise outcome
+        return _FakeResponse(outcome if isinstance(outcome, bytes) else b"")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    return HttpLLMClient(api_key="test-key", api_base="http://localhost")
+
+
+def test_http_client_returns_message_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = b'{"choices": [{"message": {"content": "[]"}}]}'
+    client = _client_with_response(monkeypatch, body)
+    assert client.generate("prompt") == "[]"
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        urllib.error.URLError("connection refused"),
+        TimeoutError("timed out"),
+        b"not json",
+        b'{"choices": []}',
+        b'{"other": 1}',
+    ],
+)
+def test_http_client_wraps_failures_in_runtime_error(
+    monkeypatch: pytest.MonkeyPatch, outcome: object
+) -> None:
+    client = _client_with_response(monkeypatch, outcome)
+    with pytest.raises(RuntimeError, match="HTTP LLM"):
+        client.generate("prompt")
