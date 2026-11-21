@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from absa.extraction.bio import (
     BIO_TAGS,
     ID_TO_TAG,
@@ -59,3 +61,23 @@ def test_build_bio_example_no_aspects() -> None:
     example = build_bio_example(text, aspect_spans=[])
     assert all(t == "O" for t in example.tags)
     assert all(tid == 0 for tid in example.tag_ids)
+
+
+@pytest.mark.parametrize(
+    ("text", "span"),
+    [("abc", (2, 1)), ("abc", (1, 1)), ("abc", (-1, 2)), ("abc", (5, 9))],
+)
+def test_align_rejects_invalid_or_out_of_range_spans(text: str, span: tuple[int, int]) -> None:
+    with pytest.raises(ValueError, match="aspect span"):
+        align_bio_tags(tokenize_with_offsets(text), [span])
+
+
+def test_align_rejects_overlapping_spans() -> None:
+    tokens = tokenize_with_offsets("hard drive fast")
+    with pytest.raises(ValueError, match="overlaps an earlier span"):
+        align_bio_tags(tokens, [(0, 10), (5, 10)])
+
+
+def test_align_tags_whole_token_when_span_cuts_through_it() -> None:
+    tokens = tokenize_with_offsets("OSX works")
+    assert align_bio_tags(tokens, [(0, 2)]) == ["B-ASP", "O"]

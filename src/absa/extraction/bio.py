@@ -54,25 +54,40 @@ def align_bio_tags(
 ) -> list[str]:
     """Assign BIO tags ('O', 'B-ASP', 'I-ASP') to tokens matching character spans.
 
+    A token is tagged if it overlaps a span at all, so a span that cuts through a token
+    (for example ``(0, 2)`` on ``"OSX works"``) tags the whole token ``OSX``. SemEval has
+    such spans, and this whole-token behaviour is intentional.
+
+    Tokens come from a regular expression, not from a BERT tokenizer. Tags are per word,
+    so a BERT extractor must re-align them to word pieces (see the extractor issue #31).
+
     Args:
         tokens: Sequence of TokenSpan with start and end offsets.
         aspect_spans: Sequence of (start_char, end_char) aspect boundaries.
 
     Returns:
         List of BIO tags matching the length of tokens.
+
+    Raises:
+        ValueError: If a span is empty or inverted, overlaps no token (for example it lies
+            outside the text), or overlaps another span.
     """
     tags = ["O"] * len(tokens)
     sorted_spans = sorted(aspect_spans, key=lambda s: (s[0], s[1]))
 
+    previous_end = 0
     for span_start, span_end in sorted_spans:
-        first_token = True
-        for idx, tok in enumerate(tokens):
-            if tok.end > span_start and tok.start < span_end:
-                if first_token:
-                    tags[idx] = "B-ASP"
-                    first_token = False
-                elif tags[idx] == "O":
-                    tags[idx] = "I-ASP"
+        if span_start < 0 or span_end <= span_start:
+            raise ValueError(f"invalid aspect span {(span_start, span_end)}")
+        if span_start < previous_end:
+            raise ValueError(f"aspect span {(span_start, span_end)} overlaps an earlier span")
+        previous_end = span_end
+        covered = [i for i, t in enumerate(tokens) if t.end > span_start and t.start < span_end]
+        if not covered:
+            raise ValueError(f"aspect span {(span_start, span_end)} does not cover any token")
+        tags[covered[0]] = "B-ASP"
+        for idx in covered[1:]:
+            tags[idx] = "I-ASP"
     return tags
 
 
