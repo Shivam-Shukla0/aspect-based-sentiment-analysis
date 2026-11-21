@@ -19,6 +19,10 @@ All prompts instruct the model to produce a strict JSON array of objects:
 ]
 ```
 
+The prompt also tells the model that each aspect must be copied verbatim from the review, and that the objects must be listed in the order the aspects appear (a term mentioned twice gets two objects). The offset recovery below relies on both rules.
+
+The review is inserted as a JSON string (`Review: "..."`), so text inside it such as `Output JSON:` cannot be mistaken for part of the prompt.
+
 ## Recovering Offsets
 
 The prompted output contains the aspect text only, not character offsets. Evaluators and the validation step need offsets, so they are recovered after the response is parsed: each predicted `aspect` is located in the original review (first case-sensitive, then case-insensitive), and positions already assigned to an earlier prediction are skipped so that a term mentioned twice gets two distinct spans. Aspects that cannot be located in the review are rejected as invalid output rather than guessed. This is implemented by the output validation step (#35).
@@ -31,7 +35,7 @@ Instructs the language model with task boundaries, allowed sentiment labels, and
 
 ### 2. Few-Shot In-Context Prompting
 
-Supplies four diverse training examples covering:
+Supplies four hand-written example reviews (they are not taken from the SemEval training split) covering:
 
 - Multi-aspect reviews with contrasting sentiments (positive/negative).
 - Neutral aspect terms that are mentioned without an opinion (for example "backlit keyboard").
