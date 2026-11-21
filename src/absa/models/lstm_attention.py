@@ -179,6 +179,7 @@ class AbsaLstmModel(nn.Module):
             config.dropout,
             bidirectional=config.bidirectional,
         )
+        self.embedding_dropout = nn.Dropout(config.dropout)
         self.attention = AspectAttention(self.encoder.output_size, num_classes)
 
     def forward(
@@ -188,8 +189,13 @@ class AbsaLstmModel(nn.Module):
         aspect_ids: Tensor,
         aspect_lengths: Tensor,
     ) -> tuple[Tensor, Tensor]:
-        """Encode the review and aspect, then classify; returns ``(logits, weights)``."""
-        review_states, review_mask = self.encoder(self.embedding(review_ids), review_lengths)
-        aspect_states, aspect_mask = self.encoder(self.embedding(aspect_ids), aspect_lengths)
+        """Encode the review and aspect, then classify; returns ``(logits, weights)``.
+
+        ``config.dropout`` is applied to the embeddings in training mode only.
+        """
+        review_embedded = self.embedding_dropout(self.embedding(review_ids))
+        aspect_embedded = self.embedding_dropout(self.embedding(aspect_ids))
+        review_states, review_mask = self.encoder(review_embedded, review_lengths)
+        aspect_states, aspect_mask = self.encoder(aspect_embedded, aspect_lengths)
         logits, weights = self.attention(review_states, review_mask, aspect_states, aspect_mask)
         return logits, weights

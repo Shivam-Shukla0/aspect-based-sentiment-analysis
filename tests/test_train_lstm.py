@@ -45,6 +45,8 @@ def test_script_tunes_then_scores_the_test_file_without_conflict(tmp_path: Path)
             str(data),
             "--output-dir",
             str(out),
+            "--dropout",
+            "0.0",
             "--hidden",
             "4",
             "--lr",

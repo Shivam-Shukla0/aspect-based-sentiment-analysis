@@ -31,16 +31,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--hidden", type=int, nargs="+", default=[64, 128])
     parser.add_argument("--lr", type=float, nargs="+", default=[1e-3, 3e-3])
+    parser.add_argument("--dropout", type=float, nargs="+", default=[0.0, 0.3, 0.5])
+    parser.add_argument("--weighting", choices=("off", "on", "both"), default="both")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--device", default="auto")
     return parser
 
 
 def _grid(args: argparse.Namespace) -> list[LstmConfig]:
+    weightings = {"off": (False,), "on": (True,), "both": (False, True)}[args.weighting]
     return [
         LstmConfig(
             embedding_dim=100,
             hidden_size=hidden,
+            dropout=dropout,
             learning_rate=lr,
             batch_size=32,
             epochs=args.epochs,
@@ -48,7 +52,9 @@ def _grid(args: argparse.Namespace) -> list[LstmConfig]:
             device=args.device,
             drop_conflict=True,
         )
-        for hidden, lr, weighting in itertools.product(args.hidden, args.lr, (False, True))
+        for hidden, lr, weighting, dropout in itertools.product(
+            args.hidden, args.lr, weightings, args.dropout
+        )
     ]
 
 
@@ -94,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(
         f"{args.domain}: chosen hidden={best_config.hidden_size} lr={best_config.learning_rate} "
-        f"weighted={best_config.class_weighting}; "
+        f"dropout={best_config.dropout} weighted={best_config.class_weighting}; "
         f"test accuracy {report.metrics.accuracy:.4f} macro F1 {report.metrics.macro_f1:.4f}"
     )
     return 0
