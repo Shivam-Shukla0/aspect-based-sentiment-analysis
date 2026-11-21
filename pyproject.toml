@@ -93,7 +93,13 @@ disallow_subclassing_any = false
 # (ignore_missing_imports above) that same call resolves to Any and the
 # ignore becomes "unused" instead, which strict mode would otherwise
 # flag as an error purely because of which environment mypy ran in.
-module = ["absa.models.lstm_training", "absa.models.bert_classifier", "tests.test_bert_classifier"]
+module = [
+  "absa.models.lstm_training",
+  "absa.models.bert_classifier",
+  "absa.models.bert_extractor",
+  "tests.test_bert_classifier",
+  "tests.test_bert_extractor",
+]
 warn_unused_ignores = false
 
 [tool.codespell]
