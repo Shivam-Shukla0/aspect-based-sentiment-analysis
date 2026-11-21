@@ -50,7 +50,7 @@ def normalize_sentences(
             record: dict[str, object] = {
                 "review": sentence.text,
                 "aspect": span.term,
-                "sentiment": span.polarity.strip().lower(),
+                "sentiment": span.polarity,
                 "sentence_id": sentence.sentence_id,
                 "domain": domain,
                 "start": span.start,

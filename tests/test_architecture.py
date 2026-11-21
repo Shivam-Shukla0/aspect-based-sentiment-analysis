@@ -29,7 +29,7 @@ ALLOWED: dict[str, frozenset[str]] = {
     "models": frozenset({"config", "data", "evaluation", "reproducibility", "_lazy"}),
     "extraction": frozenset({"config", "data", "reproducibility", "_lazy"}),
     "evaluation": frozenset({"config", "data"}),
-    "inference": frozenset({"config", "data", "models", "extraction"}),
+    "inference": frozenset({"_lazy", "config", "data", "models", "extraction"}),
 }
 APP_ALLOWED = frozenset({"config", "data", "inference"})
 

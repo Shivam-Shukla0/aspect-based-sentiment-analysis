@@ -37,7 +37,7 @@ All packages live under `src/` and are installed as `absa`. The last column list
 | `absa.models`          | Sentiment classifiers that take a review and a supplied aspect.                                                | planned                                                    | `config`, `data`, `evaluation`, `reproducibility`, `_lazy` |
 | `absa.extraction`      | Aspect extraction from a review.                                                                               | planned                                                    | `config`, `data`, `reproducibility`, `_lazy`               |
 | `absa.evaluation`      | Metrics and the evaluation protocol. Works on predictions, never on models.                                    | planned                                                    | `config`, `data`                                           |
-| `absa.inference`       | One prediction interface that combines models and extraction.                                                  | planned                                                    | `config`, `data`, `models`, `extraction`                   |
+| `absa.inference`       | One prediction interface that combines models and extraction.                                                  | planned                                                    | `config`, `data`, `models`, `extraction`, `_lazy`          |
 
 `absa.__main__` is the command line entry point (`python -m absa`). Like `app/`, `scripts/` and the notebooks, it is allowed to compose several packages.
 

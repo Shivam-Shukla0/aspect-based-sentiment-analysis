@@ -18,7 +18,7 @@ WITH_ASPECTS = ParsedSentence(
     text="The battery is weak but the screen is excellent.",
     spans=(
         AspectSpan(term="battery", start=4, end=11, polarity="negative"),
-        AspectSpan(term="screen", start=28, end=34, polarity="POSITIVE"),
+        AspectSpan(term="screen", start=28, end=34, polarity="positive"),
     ),
 )
 WITHOUT_ASPECTS = ParsedSentence(sentence_id="2", text="Great value for the price.", spans=())
@@ -43,7 +43,7 @@ def test_offsets_are_preserved() -> None:
     assert battery["end"] == 11
 
 
-def test_sentiment_label_is_lowercased() -> None:
+def test_sentiment_label_is_carried_over() -> None:
     records, _ = normalize_sentences([WITH_ASPECTS], domain="laptop")
     screen = next(r for r in records if r["aspect"] == "screen")
     assert screen["sentiment"] == "positive"
