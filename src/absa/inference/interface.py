@@ -15,6 +15,10 @@ class InferenceError(Exception):
     """Base exception for all inference errors."""
 
 
+class DuplicateModelError(InferenceError):
+    """Raised when a model name is registered twice without ``replace=True``."""
+
+
 class ModelNotFoundError(InferenceError):
     """Raised when an unknown model name is requested."""
 
@@ -69,13 +73,27 @@ class Predictor(Protocol):
 _REGISTRY: dict[str, Callable[[], Predictor]] = {}
 
 
-def register_predictor(name: str, factory: Callable[[], Predictor]) -> None:
-    """Register a predictor factory under a model name."""
-    _REGISTRY[name.lower().strip()] = factory
+def register_predictor(
+    name: str, factory: Callable[[], Predictor], *, replace: bool = False
+) -> None:
+    """Register a predictor factory under a model name (case-insensitive).
+
+    Raises:
+        DuplicateModelError: If ``name`` is already registered and ``replace`` is False.
+    """
+    key = name.lower().strip()
+    if key in _REGISTRY and not replace:
+        raise DuplicateModelError(f"Model {name!r} is already registered; pass replace=True")
+    _REGISTRY[key] = factory
 
 
 def get_predictor(name: str) -> Predictor:
     """Instantiate and return a predictor by registered name.
+
+    The factory runs on every call and nothing is cached here. A factory that loads a
+    checkpoint is therefore expensive to call per request: the caller (for example the
+    Flask backend) should call ``get_predictor`` once at start-up and reuse the instance,
+    or register a factory that returns a shared, lazily loaded instance.
 
     Raises:
         ModelNotFoundError: If name is not registered.
