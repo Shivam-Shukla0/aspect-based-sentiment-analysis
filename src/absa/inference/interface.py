@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
+
+from absa.config import SENTIMENT_LABELS
+from absa.data.schema import validate_record
 
 
 class InferenceError(Exception):
@@ -13,6 +17,10 @@ class InferenceError(Exception):
 
 class ModelNotFoundError(InferenceError):
     """Raised when an unknown model name is requested."""
+
+
+class CheckpointNotFoundError(InferenceError):
+    """Raised when a model checkpoint file or directory does not exist."""
 
 
 class PredictionValidationError(InferenceError):
@@ -84,6 +92,55 @@ def list_available_models() -> list[str]:
     return sorted(_REGISTRY.keys())
 
 
-def clear_registry() -> None:
-    """Clear all registered predictor factories (primarily used in testing)."""
-    _REGISTRY.clear()
+def require_checkpoint(path: str | Path) -> Path:
+    """Return ``path`` as a ``Path`` if it exists.
+
+    Raises:
+        CheckpointNotFoundError: If the checkpoint is missing.
+    """
+    checkpoint = Path(path)
+    if not checkpoint.exists():
+        raise CheckpointNotFoundError(f"Checkpoint not found: {checkpoint}")
+    return checkpoint
+
+
+def validate_prediction_record(
+    record: PredictionRecord, allowed_labels: Sequence[str] = SENTIMENT_LABELS
+) -> PredictionRecord:
+    """Return ``record`` unchanged if it satisfies the shared record contract.
+
+    The review must be a non-empty string, and every prediction needs a non-empty
+    aspect that occurs in the review (case-insensitive) and a sentiment from
+    ``allowed_labels``.
+
+    Raises:
+        PredictionValidationError: If the record or any prediction is invalid.
+    """
+    if not isinstance(record, PredictionRecord):
+        raise PredictionValidationError(f"expected a PredictionRecord, got {type(record).__name__}")
+    for prediction in record.predictions:
+        try:
+            validate_record(
+                {
+                    "review": record.review,
+                    "aspect": prediction.aspect,
+                    "sentiment": prediction.sentiment,
+                },
+                allowed_labels,
+            )
+        except ValueError as err:
+            raise PredictionValidationError(f"invalid prediction {prediction!r}: {err}") from err
+        if prediction.aspect.lower() not in record.review.lower():
+            raise PredictionValidationError(
+                f"aspect {prediction.aspect!r} does not occur in the review"
+            )
+    return record
+
+
+def predict_validated(predictor: Predictor, review: str) -> PredictionRecord:
+    """Run ``predictor.predict`` and validate its output.
+
+    Raises:
+        PredictionValidationError: If the predictor output is invalid.
+    """
+    return validate_prediction_record(predictor.predict(review))
