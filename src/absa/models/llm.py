@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Protocol
+
+from absa.models.llm_errors import LLMClientError
 
 
 class LLMClient(Protocol):
@@ -35,6 +38,10 @@ class MockLLMClient:
         return self.responses.get(prompt, self.default_response)
 
 
+_HTTP_TOO_MANY_REQUESTS = 429
+_HTTP_SERVER_ERROR = 500
+
+
 class HttpLLMClient:
     """HTTP client for API endpoints reading credentials from environment variables."""
 
@@ -57,7 +64,14 @@ class HttpLLMClient:
         self.timeout: float = timeout
 
     def generate(self, prompt: str) -> str:
-        """Invoke API endpoint and return text content."""
+        """Invoke API endpoint and return text content.
+
+        Raises:
+            ValueError: If no API key is configured.
+            LLMClientError: On a network error, a timeout, an HTTP error, a response that is
+                not valid chat-completion JSON, or a reply without text. Its ``retryable``
+                flag tells a retry wrapper whether another attempt makes sense.
+        """
         if not self.api_key:
             raise ValueError("LLM_API_KEY environment variable is not configured")
         if not self.model:
@@ -84,12 +98,26 @@ class HttpLLMClient:
         ).encode("utf-8")
 
         req = urllib.request.Request(url, data=payload, headers=headers)  # noqa: S310
+        return self._send(req)
+
+    def _send(self, req: urllib.request.Request) -> str:
+        """Send ``req`` and return the reply text, raising ``LLMClientError`` on any failure."""
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
-                return str(data["choices"][0]["message"]["content"])
-        except urllib.error.URLError as err:
-            raise RuntimeError(f"HTTP LLM generation failed: {err}") from err
+            content = data["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as err:
+            retryable = err.code == _HTTP_TOO_MANY_REQUESTS or err.code >= _HTTP_SERVER_ERROR
+            raise LLMClientError(
+                f"HTTP LLM generation failed: status {err.code}", retryable=retryable
+            ) from err
+        except (OSError, http.client.HTTPException) as err:
+            raise LLMClientError(f"HTTP LLM generation failed: {err}") from err
+        except (ValueError, KeyError, IndexError, TypeError) as err:
+            raise LLMClientError(f"HTTP LLM returned an unexpected response: {err!r}") from err
+        if not isinstance(content, str):
+            raise LLMClientError("HTTP LLM returned no text content", retryable=False)
+        return content
 
 
 def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:
