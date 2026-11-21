@@ -94,7 +94,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. The full CI check set can be run locally (see [CONTRIBUTING.md](CONTRIBUTING.md#running-ci-locally)).
+Tests run offline and use small synthetic records. `pytest` also enforces a coverage floor. To run only the fast tests, use `pytest -m "not slow and not gpu"`. See [Test conventions](CONTRIBUTING.md#test-conventions) for the rules and shared fixtures. The full CI check set can be run locally (see [CONTRIBUTING.md](CONTRIBUTING.md#running-ci-locally)).
 
 ## Docker
 

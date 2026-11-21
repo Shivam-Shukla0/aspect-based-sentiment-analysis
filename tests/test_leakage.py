@@ -19,3 +19,11 @@ def test_overlap_ignores_case_and_whitespace() -> None:
     assert find_overlap(TRAIN, test) == {"the battery is weak."}
     with pytest.raises(ValueError, match="1 review"):
         assert_no_leakage(TRAIN, test)
+
+
+def test_shared_sample_records_leak_against_themselves(
+    sample_aspect_records: list[dict[str, str]],
+) -> None:
+    assert len(find_overlap(sample_aspect_records, sample_aspect_records)) == 2
+    with pytest.raises(ValueError, match="2 review"):
+        assert_no_leakage(sample_aspect_records, sample_aspect_records)

@@ -45,6 +45,14 @@ npx --yes prettier@3.6.2 --check "**/*.{md,yml,yaml,json}"
 docker build -t absa:ci . && scripts/smoke_test.sh docker run --rm -i absa:ci
 ```
 
+## Test conventions
+
+- Tests are offline: no network calls, no downloads, no real datasets. Fake network access (for example by monkeypatching `urllib.request.urlopen`) instead of using it.
+- Tests are deterministic: no dependence on wall-clock time, random state without a fixed seed (`absa.reproducibility.set_seed`), or the order tests run in.
+- Use the shared fixtures from `tests/conftest.py` instead of copying data into each test: `synthetic_laptop_xml`, `synthetic_restaurant_xml` (SemEval-style XML) and `sample_aspect_records` (valid review/aspect/sentiment records).
+- Mark tests that take noticeably long with `@pytest.mark.slow` and tests that need a GPU with `@pytest.mark.gpu`. Both markers are registered in `pyproject.toml`, and `--strict-markers` rejects unregistered ones.
+- Run only the fast tests with `pytest -m "not slow and not gpu"`. CI runs the full suite; the fast subset is for quick local runs.
+
 ## Do not commit
 
 - Secrets, tokens, API keys, or `.env` files.
