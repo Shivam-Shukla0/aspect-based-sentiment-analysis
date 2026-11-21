@@ -2,6 +2,7 @@
 
 from absa.inference.interface import (
     AspectPrediction,
+    CheckpointNotFoundError,
     InferenceError,
     ModelNotFoundError,
     PredictionRecord,
@@ -10,11 +11,15 @@ from absa.inference.interface import (
     clear_registry,
     get_predictor,
     list_available_models,
+    predict_validated,
     register_predictor,
+    require_checkpoint,
+    validate_prediction,
 )
 
 __all__ = [
     "AspectPrediction",
+    "CheckpointNotFoundError",
     "InferenceError",
     "ModelNotFoundError",
     "PredictionRecord",
@@ -23,5 +28,8 @@ __all__ = [
     "clear_registry",
     "get_predictor",
     "list_available_models",
+    "predict_validated",
     "register_predictor",
+    "require_checkpoint",
+    "validate_prediction",
 ]

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
+
+from absa.config import SENTIMENT_LABELS
 
 
 class InferenceError(Exception):
@@ -17,6 +20,10 @@ class ModelNotFoundError(InferenceError):
 
 class PredictionValidationError(InferenceError):
     """Raised when model output fails validation."""
+
+
+class CheckpointNotFoundError(InferenceError):
+    """Raised when a model checkpoint file does not exist."""
 
 
 @dataclass(frozen=True)
@@ -87,3 +94,53 @@ def list_available_models() -> list[str]:
 def clear_registry() -> None:
     """Clear all registered predictor factories (primarily used in testing)."""
     _REGISTRY.clear()
+
+
+def require_checkpoint(path: Path) -> Path:
+    """Return ``path`` if it is an existing checkpoint file.
+
+    Raises:
+        CheckpointNotFoundError: If no file exists at ``path``.
+    """
+    if not path.is_file():
+        raise CheckpointNotFoundError(f"Checkpoint not found: {path}")
+    return path
+
+
+def validate_prediction(record: PredictionRecord) -> PredictionRecord:
+    """Return ``record`` if it follows the shared inference contract.
+
+    The review and every aspect must be non-empty text and every sentiment one of
+    ``absa.config.SENTIMENT_LABELS``. An empty prediction list is valid: it means no
+    aspect was found.
+
+    Raises:
+        PredictionValidationError: If any part of the record is invalid.
+    """
+    if not isinstance(record.review, str) or not record.review.strip():
+        raise PredictionValidationError("review must be a non-empty string")
+    for index, prediction in enumerate(record.predictions):
+        if not isinstance(prediction.aspect, str) or not prediction.aspect.strip():
+            raise PredictionValidationError(f"predictions[{index}] has an empty aspect")
+        if prediction.sentiment not in SENTIMENT_LABELS:
+            raise PredictionValidationError(
+                f"predictions[{index}] has unknown sentiment {prediction.sentiment!r}; "
+                f"expected one of {SENTIMENT_LABELS}"
+            )
+    return record
+
+
+def predict_validated(predictor: Predictor, review: str) -> PredictionRecord:
+    """Run ``predictor`` on ``review`` and return a validated result.
+
+    Raises:
+        PredictionValidationError: If the output breaks the contract.
+        InferenceError: If the predictor itself fails for any other reason.
+    """
+    try:
+        record = predictor.predict(review)
+    except InferenceError:
+        raise
+    except Exception as err:  # any backend failure becomes a typed error
+        raise InferenceError(f"Prediction failed: {err}") from err
+    return validate_prediction(record)
