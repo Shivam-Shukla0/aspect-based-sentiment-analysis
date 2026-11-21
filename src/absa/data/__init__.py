@@ -1,5 +1,17 @@
-"""Aspect-level record schema and validation."""
+"""Aspect-level record schema and validation.
 
+``CategoryAnnotation``, ``ParsedSentence``, ``parse_laptop_xml`` and
+``parse_restaurant_xml`` need ``lxml``; they are imported lazily (PEP 562)
+on first access, so importing this package for the lightweight,
+dependency-free names above (``validate_record`` and friends) never
+requires lxml to be installed.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from absa._lazy import lazy_getattr
 from absa.data.bert_dataset import (
     ID_TO_SENTIMENT,
     SENTIMENT_TO_ID,
@@ -7,6 +19,8 @@ from absa.data.bert_dataset import (
     build_pair_dataset,
     build_pair_example,
 )
+from absa.data.eda import aspect_frequency, class_balance, domain_counts, review_lengths
+from absa.data.normalize import build_processed_files, no_aspect_filename, normalize_sentences
 from absa.data.schema import (
     RECORD_FIELDS,
     AspectPrediction,
@@ -16,6 +30,16 @@ from absa.data.schema import (
     validate_prediction,
     validate_record,
 )
+from absa.data.splits import split_train_val
+from absa.data.validation import RecordError, ValidationSummary, read_jsonl, validate_records
+
+if TYPE_CHECKING:
+    from absa.data.xml_parser import (
+        CategoryAnnotation,
+        ParsedSentence,
+        parse_laptop_xml,
+        parse_restaurant_xml,
+    )
 
 __all__ = [
     "ID_TO_SENTIMENT",
@@ -24,10 +48,38 @@ __all__ = [
     "AspectPrediction",
     "AspectSpan",
     "BertPairExample",
+    "CategoryAnnotation",
     "ExtractionRecord",
+    "ParsedSentence",
     "PredictionRecord",
+    "RecordError",
+    "ValidationSummary",
+    "aspect_frequency",
     "build_pair_dataset",
     "build_pair_example",
+    "build_processed_files",
+    "class_balance",
+    "domain_counts",
+    "no_aspect_filename",
+    "normalize_sentences",
+    "parse_laptop_xml",
+    "parse_restaurant_xml",
+    "read_jsonl",
+    "review_lengths",
+    "split_train_val",
     "validate_prediction",
     "validate_record",
+    "validate_records",
 ]
+
+_LAZY = {
+    "CategoryAnnotation": "absa.data.xml_parser",
+    "ParsedSentence": "absa.data.xml_parser",
+    "parse_laptop_xml": "absa.data.xml_parser",
+    "parse_restaurant_xml": "absa.data.xml_parser",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve ``_LAZY`` names by importing their submodule on first access."""
+    return lazy_getattr(__name__, _LAZY, name)

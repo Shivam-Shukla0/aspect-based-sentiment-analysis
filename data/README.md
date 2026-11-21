@@ -91,3 +91,13 @@ One JSON object per sentence, for aspect extraction:
 ## Processed file naming
 
 Processed files live under `data/processed/` (git-ignored) as JSON Lines, one file per domain and split: `{domain}_{split}.jsonl`, for example `laptop_train.jsonl` or `restaurant_test.jsonl`. `absa.config.processed_filename(domain, split)` builds this name; `absa.config.DOMAINS` and `absa.config.SPLITS` list the allowed values. The official test split is never re-split or overwritten.
+
+Sentences with no aspect-term annotation are not aspect records, so they do not fit the schema above; `absa.data.normalize_sentences` keeps them separately instead of dropping them, in `{domain}_{split}_no_aspect.jsonl` (`absa.data.no_aspect_filename`), one `{"sentence_id", "domain", "review"}` object per line.
+
+## Building the processed files
+
+```bash
+python -m scripts.build_processed data/raw/laptops-trial.xml --domain laptop --split train
+```
+
+Parses one raw XML file with the matching domain parser (`absa.data.parse_laptop_xml` or `parse_restaurant_xml`), normalizes it with `absa.data.build_processed_files`, and writes both the aspect-record file and the no-aspect file under `data/processed/` (or `--output-dir`). Running it twice on the same input overwrites each file with identical content. Category annotations (`aspectCategories`, restaurant files only) are not part of this schema and are not written by this command.
