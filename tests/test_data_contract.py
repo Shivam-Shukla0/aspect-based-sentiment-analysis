@@ -48,3 +48,9 @@ def test_malformed_text_fields_rejected(field: str, bad: object) -> None:
 def test_non_dict_rejected(bad: object) -> None:
     with pytest.raises(ValueError, match="must be a dict"):
         validate_record(bad)
+
+
+def test_shared_sample_records_are_valid(sample_aspect_records: list[dict[str, str]]) -> None:
+    assert [validate_record(dict(record)) for record in sample_aspect_records] == (
+        sample_aspect_records
+    )
