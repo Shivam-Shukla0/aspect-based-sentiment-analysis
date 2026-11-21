@@ -20,12 +20,14 @@ RECORDS = [
     _rec("The speed really impressed me.", "speed", "positive"),
     _rec("Terrible keyboard, keys stick.", "keyboard", "negative"),
 ]
-CONFIG = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.25)
+CONFIG = LstmConfig(
+    device="cpu", embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.25
+)
 
 
 @pytest.fixture
 def checkpoint_and_test_file(tmp_path: Path) -> tuple[Path, Path]:
-    model, vocab, _, _ = train(RECORDS, RECORDS[:1], CONFIG)
+    model, vocab, _ = train(RECORDS, RECORDS[:1], CONFIG)
     checkpoint_path = tmp_path / "model.pt"
     save_checkpoint(checkpoint_path, model, vocab, CONFIG)
     test_file = tmp_path / "test.jsonl"
