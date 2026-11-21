@@ -136,3 +136,8 @@ def test_spans_from_tags_widens_to_the_whole_token() -> None:
 def test_spans_from_tags_rejects_bad_tags(tags: list[str], message: str) -> None:
     with pytest.raises(ValueError, match=message):
         spans_from_tags(tokenize_with_offsets("hard drive"), tags)
+
+
+def test_build_rejects_a_span_that_runs_past_the_end_of_the_text() -> None:
+    with pytest.raises(ValueError, match="ends after the text"):
+        build_bio_example("The battery life is great", [(0, 99)])
