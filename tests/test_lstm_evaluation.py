@@ -28,7 +28,9 @@ TEST_RECORDS = [
     _rec("Speed is fine, nothing special.", "speed", "neutral"),
     _rec("Price is too high for this quality.", "price", "negative"),
 ]
-CONFIG = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_fraction=0.25)
+CONFIG = LstmConfig(
+    device="cpu", embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_fraction=0.25
+)
 
 
 def _trained_model() -> tuple[AbsaLstmModel, Vocabulary]:

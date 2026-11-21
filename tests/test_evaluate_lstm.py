@@ -20,7 +20,9 @@ RECORDS = [
     _rec("The speed really impressed me.", "speed", "positive"),
     _rec("Terrible keyboard, keys stick.", "keyboard", "negative"),
 ]
-CONFIG = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.25)
+CONFIG = LstmConfig(
+    device="cpu", embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.25
+)
 
 
 @pytest.fixture

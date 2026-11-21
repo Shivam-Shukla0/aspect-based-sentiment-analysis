@@ -30,7 +30,7 @@ RECORDS = [
     _rec("Price is too high for this quality.", "price", "negative"),
 ]
 TINY_CONFIG = LstmConfig(
-    embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.3, seed=42
+    device="cpu", embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.3, seed=42
 )
 
 
@@ -51,7 +51,13 @@ def test_different_seed_can_give_different_first_epoch_loss() -> None:
     val_records = _records_with_ids(RECORDS)[8:]
     _, _, history_a = train(train_records, val_records, TINY_CONFIG)
     other_config = LstmConfig(
-        embedding_dim=8, hidden_size=4, batch_size=4, epochs=1, val_fraction=0.3, seed=7
+        device="cpu",
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=1,
+        val_fraction=0.3,
+        seed=7,
     )
     _, _, history_b = train(train_records, val_records, other_config)
     assert history_a[0].train_loss != history_b[0].train_loss
@@ -60,7 +66,9 @@ def test_different_seed_can_give_different_first_epoch_loss() -> None:
 def test_training_produces_one_epoch_metrics_entry_per_epoch() -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
-    config = LstmConfig(embedding_dim=8, hidden_size=4, batch_size=4, epochs=3, val_fraction=0.3)
+    config = LstmConfig(
+        device="cpu", embedding_dim=8, hidden_size=4, batch_size=4, epochs=3, val_fraction=0.3
+    )
     _, _, history = train(train_records, val_records, config)
     assert [epoch_metrics.epoch for epoch_metrics in history] == [1, 2, 3]
 
@@ -69,6 +77,7 @@ def test_loss_decreases_with_enough_epochs_on_a_tiny_dataset() -> None:
     train_records = _records_with_ids(RECORDS)[:8]
     val_records = _records_with_ids(RECORDS)[8:]
     config = LstmConfig(
+        device="cpu",
         embedding_dim=8,
         hidden_size=4,
         batch_size=8,
@@ -138,10 +147,22 @@ def test_train_returns_the_best_epoch_not_the_last(monkeypatch: pytest.MonkeyPat
         monkeypatch.setattr("absa.models.lstm_training.evaluate", fake_evaluate)
 
     config_three = LstmConfig(
-        embedding_dim=8, hidden_size=4, batch_size=4, epochs=3, val_fraction=0.3, seed=42
+        device="cpu",
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=3,
+        val_fraction=0.3,
+        seed=42,
     )
     config_two = LstmConfig(
-        embedding_dim=8, hidden_size=4, batch_size=4, epochs=2, val_fraction=0.3, seed=42
+        device="cpu",
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=2,
+        val_fraction=0.3,
+        seed=42,
     )
     scripted([0.2, 0.9, 0.4])
     model_three, _, history = train(train_records, val_records, config_three)
@@ -162,6 +183,7 @@ def test_class_weights_favour_rare_classes_and_zero_absent_ones() -> None:
 
 def test_training_with_class_weighting_runs_and_is_logged(tmp_path: Path) -> None:
     config = LstmConfig(
+        device="cpu",
         embedding_dim=8,
         hidden_size=4,
         batch_size=4,
