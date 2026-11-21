@@ -106,8 +106,8 @@ Changes to the record schema (`src/absa/data/schema.py`, `data/README.md`) or th
 - **Data Schema Owner**: Rajeev Yadav (`Rajeevydvv`)
 - **Evaluation Protocol Owner**: Shivam Shukla (`Shivam-Shukla0`)
 
-Any change to these modules requires explicit review and approval from the designated owner.
+Any change to these modules requires explicit review and approval from the designated owner. The package dependency rules (`docs/architecture.md` and `tests/test_architecture.py`) are shared as well: change both together, and ask every workstream for review.
 
 ## License
 
-This project is licensed under the Apache License 2.0 (see `LICENSE` file for details).
+No licence has been chosen yet, so all rights are reserved by default. The team has not made a licensing decision, and there is no `LICENSE` file. Do not assume any open-source terms until one is added.
