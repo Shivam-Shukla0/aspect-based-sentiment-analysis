@@ -95,7 +95,6 @@ docker build -t absa:ci . && scripts/smoke_test.sh docker run --rm -i absa:ci
 - Mark tests that take noticeably long with `@pytest.mark.slow` and tests that need a GPU with `@pytest.mark.gpu`. Both markers are registered in `pyproject.toml`, and `--strict-markers` rejects unregistered ones.
 - Run only the fast tests with `pytest -m "not slow and not gpu"`. CI runs the full suite; the fast subset is for quick local runs.
 
-
 ## Google Colab and Notebook Workflow
 
 - Notebooks in `notebooks/` are reserved for EDA, experiment demonstrations, and training visualizations.
