@@ -34,7 +34,8 @@ class LstmConfig:
     loss by ``total / (classes_present * class_count)``, so rare classes count more; classes
     with no training example get weight 0. Validation loss is never weighted, so it stays
     comparable between runs. ``device`` is ``auto`` (CUDA when available, else CPU), ``cpu``
-    or ``cuda``.
+    or ``cuda``. With ``drop_conflict`` the rare ``conflict`` label is removed from the data and
+    left out of the validation macro F1 (the usual SemEval-2014 protocol).
     """
 
     embedding_dim: int = 50
@@ -50,6 +51,14 @@ class LstmConfig:
     seed: int = RANDOM_SEED
     class_weighting: bool = False
     device: str = "auto"
+    drop_conflict: bool = False
+
+    @property
+    def metric_labels(self) -> tuple[str, ...]:
+        """Return the labels that validation macro F1 is computed over."""
+        if self.drop_conflict:
+            return tuple(label for label in SENTIMENT_LABELS if label != "conflict")
+        return tuple(SENTIMENT_LABELS)
 
     @property
     def model_config(self) -> ModelConfig:
@@ -205,7 +214,7 @@ def train(
     for epoch in range(1, config.epochs + 1):
         train_loss, _, _ = _run_epoch(model, train_loader, optimizer, weights, device)
         val_loss, val_true, val_pred = _run_epoch(model, val_loader, None, None, device)
-        val_macro_f1 = evaluate(val_true, val_pred, labels=SENTIMENT_LABELS).macro_f1
+        val_macro_f1 = evaluate(val_true, val_pred, labels=config.metric_labels).macro_f1
         history.append(EpochMetrics(epoch, train_loss, val_loss, val_macro_f1))
         if val_macro_f1 > best_f1:
             best_f1 = val_macro_f1
@@ -222,7 +231,10 @@ def run_training(
 
     The checkpoint holds the weights of the epoch with the best validation macro F1,
     which is the epoch reported as ``best_epoch``; ``history`` records every epoch.
+    With ``config.drop_conflict`` the ``conflict`` records are removed first.
     """
+    if config.drop_conflict:
+        records = [record for record in records if record["sentiment"] != "conflict"]
     train_records, val_records = split_train_val(
         records, val_fraction=config.val_fraction, seed=config.seed
     )

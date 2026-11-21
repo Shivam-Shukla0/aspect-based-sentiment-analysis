@@ -224,3 +224,27 @@ def test_training_and_prediction_run_on_the_gpu(tmp_path: Path) -> None:
     assert len(predict(loaded, loaded_vocab, records, device="cuda")) == len(records)
     assert next(loaded.parameters()).device.type == "cuda"
     del vocab
+
+
+def test_metric_labels_follow_the_drop_conflict_option() -> None:
+    assert LstmConfig().metric_labels == ("positive", "negative", "neutral", "conflict")
+    assert LstmConfig(drop_conflict=True).metric_labels == ("positive", "negative", "neutral")
+
+
+def test_drop_conflict_removes_those_records_and_is_logged(tmp_path: Path) -> None:
+    records = _records_with_ids(RECORDS)
+    records += _records_with_ids([_rec("Mixed feelings.", "feel", "conflict")] * 2)
+    records = [{**r, "sentence_id": str(i)} for i, r in enumerate(records)]
+    config = LstmConfig(
+        device="cpu",
+        embedding_dim=8,
+        hidden_size=4,
+        batch_size=4,
+        epochs=1,
+        val_fraction=0.3,
+        drop_conflict=True,
+    )
+    result = run_training(records, config, output_dir=tmp_path)
+    log = json.loads((tmp_path / "lstm_training_log.json").read_text(encoding="utf-8"))
+    assert log["config"]["drop_conflict"] is True
+    assert result.history
