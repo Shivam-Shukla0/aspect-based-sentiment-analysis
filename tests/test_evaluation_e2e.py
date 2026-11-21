@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from absa.evaluation.e2e import (
     ClassificationMetrics,
     EndToEndMetrics,
@@ -26,9 +28,18 @@ def test_evaluate_given_aspect_classification() -> None:
 
 
 def test_evaluate_given_aspect_mismatched_lengths() -> None:
-    metrics = evaluate_given_aspect_classification(["positive"], ["positive", "negative"])
-    assert metrics.accuracy == 0.0
-    assert metrics.macro_f1 == 0.0
+    with pytest.raises(ValueError, match="same length"):
+        evaluate_given_aspect_classification(["positive"], ["positive", "negative"])
+
+
+def test_evaluate_given_aspect_empty_input() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        evaluate_given_aspect_classification([], [])
+
+
+def test_evaluate_end_to_end_mismatched_sentence_counts() -> None:
+    with pytest.raises(ValueError, match="same number of sentences"):
+        evaluate_end_to_end([[(0, 5, "positive")], []], [[(0, 5, "positive")]])
 
 
 def test_evaluate_end_to_end_matching() -> None:
