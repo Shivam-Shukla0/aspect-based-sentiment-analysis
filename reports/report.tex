@@ -7,13 +7,16 @@
 
 \author[S. Shukla and others]
        {S\ls H\ls I\ls V\ls A\ls M\ns S\ls H\ls U\ls K\ls L\ls A\\
-        Course project (institution to be completed)
+        Sitare University (roll no.\ 202410101200132)
         \and
-        N\ls I\ls K\ls H\ls I\ls L\ns C\ls H\ls A\ls U\ls R\ls A\ls S\ls I\ls Y\ls A\\
-        Course project (institution to be completed)
+        S\ls H\ls I\ls V\ls A\ls M\ns S\ls H\ls U\ls K\ls L\ls A\\
+        Sitare University (roll no.\ 202410101200133)
         \and
         R\ls A\ls J\ls E\ls E\ls V\ns Y\ls A\ls D\ls A\ls V\\
-        Course project (institution to be completed)}
+        Sitare University (roll no.\ 202410101200108)
+        \and
+        N\ls I\ls K\ls H\ls I\ls L\ns C\ls H\ls A\ls U\ls R\ls A\ls S\ls I\ls Y\ls A\\
+        Sitare University (roll no.\ 20241010200084)}
 
 \received{21 November 2026}
 \pagerange{\pageref{firstpage}--\pageref{lastpage}}
@@ -23,6 +26,8 @@
 
 \label{firstpage}
 \maketitle
+
+\begin{center}\small Deep Learning course project, Sitare University\end{center}
 
 \begin{abstract}
 Aspect-based sentiment analysis (ABSA) predicts the sentiment a review expresses towards each aspect it mentions. We study it on the SemEval-2014 Task~4 laptop and restaurant data under one evaluation protocol: hyperparameters are chosen on a validation split of the training data, and the official test file is scored once. For sentiment towards a supplied aspect we compare a bidirectional LSTM with aspect-driven attention and a BERT model fine-tuned on (review, aspect) pairs. BERT reaches 0.759 accuracy and 0.698 macro F1 on laptops and 0.829 and 0.729 on restaurants; the LSTM, trained from random word vectors, reaches 0.599 and 0.508 and 0.715 and 0.573, only about six points of accuracy above always predicting the majority class. For finding the aspects we compare a BERT token classifier with a prompted open-weights language model (Qwen2.5-7B-Instruct). The extractor reaches an exact-match span F1 of 0.781 on laptops and 0.877 on restaurants against 0.493 and 0.699 for the prompted model, and combined with the BERT classifier it gives an end-to-end F1 of 0.591 and 0.726. Most sentiment errors involve the neutral class, and most of the prompted model's loss comes from spurious aspects. Every figure is one run on a copy of the data that did not come through the official channel, so the numbers should be confirmed on the official files before they are quoted elsewhere.
