@@ -98,7 +98,8 @@ def predict(
     """
     target = resolve_device(device)
     model.to(target)
-    model.eval()
+    model.eval()  # disable dropout for deterministic predictions
+    # shuffle stays False (the default) so predictions line up with the input records.
     loader = make_dataloader(AspectDataset(records, vocab), vocab.pad_id, batch_size=32)
     predictions: list[str] = []
     with torch.no_grad():
@@ -110,6 +111,7 @@ def predict(
                 batch["aspect_ids"],
                 batch["aspect_lengths"],
             )
+            # argmax over class scores -> predicted class index -> label string.
             predictions.extend(SENTIMENT_LABELS[index] for index in logits.argmax(dim=-1).tolist())
     return predictions
 
@@ -118,6 +120,7 @@ def analyze_errors(
     records: Sequence[Mapping[str, object]], y_true: Sequence[str], y_pred: Sequence[str]
 ) -> ErrorAnalysis:
     """Collect every record whose predicted label differs from its true label."""
+    # strict=True: the three sequences must be the same length, or something is misaligned.
     errors = [
         PredictionError(str(record["review"]), str(record["aspect"]), true, predicted)
         for record, true, predicted in zip(records, y_true, y_pred, strict=True)
@@ -137,6 +140,7 @@ def evaluate_test_set(
     y_true = [str(record["sentiment"]) for record in records]
     y_pred = predict(model, vocab, records, device)
     metrics = evaluate(y_true, y_pred, labels=labels)
+    # Rows = true label, columns = predicted label, both in the order of ``labels``.
     confusion = confusion_matrix(y_true, y_pred, labels=list(labels)).tolist()
     errors = analyze_errors(records, y_true, y_pred)
     return TestEvaluationReport(

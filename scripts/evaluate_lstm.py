@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Evaluate the checkpoint on the test file, optionally save a report, and print it."""
     args = build_parser().parse_args(argv)
+    # The checkpoint carries the weights, vocabulary and config, so no other input is needed.
     model, vocab = load_checkpoint(args.checkpoint)
     records = read_jsonl(args.test_file)
     report = evaluate_test_set(model, vocab, records)

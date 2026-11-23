@@ -29,6 +29,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.output is not None:
         summary.save(args.output)
     print(json.dumps(summary.to_dict(), indent=2))
+    # Non-zero exit code on any defect so CI and shell scripts can fail the pipeline.
     return 1 if summary.errors else 0
 
 

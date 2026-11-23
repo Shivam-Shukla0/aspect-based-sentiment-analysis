@@ -23,6 +23,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import NamedTuple
 
+# Lowest supported interpreter, compared as a tuple against sys.version_info.
 MIN_PYTHON = (3, 10)
 # Distribution names, kept equal to requirements.txt (a test checks this).
 CORE_PACKAGES = (
@@ -57,6 +58,7 @@ class Report(NamedTuple):
 
 
 def _version(name: str) -> str | None:
+    # importlib.metadata reads installed-package info without importing the (heavy) package.
     try:
         return metadata.version(name)
     except metadata.PackageNotFoundError:
@@ -74,6 +76,8 @@ def load_torch(
     """Import PyTorch, returning None if it is missing or its native libraries fail to load."""
     try:
         return importer("torch")
+    # OSError covers broken native libraries (e.g. a CUDA library mismatch), not only a
+    # missing package; both mean "torch is unusable here".
     except (ImportError, OSError):
         return None
 
@@ -82,6 +86,7 @@ def describe_device(torch: ModuleType | None) -> Device:
     """Summarise the compute device that ``torch`` reports."""
     if torch is None:
         return Device(importable=False, cuda=False, summary="unknown (torch cannot be imported)")
+    # Importing torch worked; now check whether it can see a GPU.
     if not torch.cuda.is_available():
         return Device(importable=True, cuda=False, summary="CUDA not available, running on CPU")
     count = torch.cuda.device_count()
@@ -125,6 +130,7 @@ def build_report(
 
 def freeze() -> list[str]:
     """Return ``name==version`` for every installed distribution except this project."""
+    # Keyed by lower-case name so duplicates collapse and the output is sorted and stable.
     pins: dict[str, str] = {}
     for dist in metadata.distributions():
         name = dist.metadata["Name"]
@@ -141,6 +147,7 @@ def git_commit(run: Callable[..., subprocess.CompletedProcess[str]] = subprocess
             capture_output=True,
             text=True,
             check=True,
+            # Run inside the repository even if the script is started from another directory.
             cwd=Path(__file__).resolve().parents[1],
         )
     except (OSError, subprocess.CalledProcessError):
@@ -151,6 +158,7 @@ def git_commit(run: Callable[..., subprocess.CompletedProcess[str]] = subprocess
 def write_record(directory: Path, lines: Sequence[str]) -> Path:
     """Write the environment record into ``directory`` and return the file path."""
     directory.mkdir(parents=True, exist_ok=True)
+    # "# " prefix keeps the header lines as comments in a pip-style requirements listing.
     header = [f"# {line}" for line in lines]
     header += [f"# {'platform':<15} {platform.platform()}", f"# {'git commit':<15} {git_commit()}"]
     path = directory / RECORD_NAME
@@ -178,6 +186,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for error in report.errors:
         print(f"ERROR: {error}", file=sys.stderr)
     print("environment ok" if not report.errors else f"{len(report.errors)} problem(s) found")
+    # Exit 1 on any problem so CI and shell scripts can detect an unusable environment.
     return 1 if report.errors else 0
 
 

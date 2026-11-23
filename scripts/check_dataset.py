@@ -23,8 +23,10 @@ MANIFEST: Mapping[str, str] = {
 
 def sha256_of(path: Path) -> str:
     """Return the hex SHA-256 digest of the file at ``path``."""
+    # Hash in 1 MiB chunks so large files never have to fit in memory.
     digest = hashlib.sha256()
     with path.open("rb") as handle:
+        # iter(callable, sentinel) keeps calling read() until it returns b"" (end of file).
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -47,6 +49,7 @@ def check(
         if not path.is_file():
             errors.append(f"{name}: missing from {raw_dir}")
             continue
+        # A different checksum means the file was modified or is a different release.
         actual = sha256_of(path)
         if actual != expected:
             errors.append(f"{name}: checksum mismatch (expected {expected}, got {actual})")

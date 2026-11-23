@@ -18,6 +18,8 @@ from typing import TypedDict
 
 from absa.config import SENTIMENT_LABELS
 
+# The minimal contract every aspect record must satisfy; extra keys (sentence_id, domain,
+# start, end, ...) are allowed and simply ignored by validate_record.
 RECORD_FIELDS = ("review", "aspect", "sentiment")
 
 
@@ -35,6 +37,8 @@ class PredictionRecord(TypedDict):
     predictions: list[AspectPrediction]
 
 
+# frozen -> immutable (safe to share/hash); slots -> smaller, faster objects. Both dataclasses
+# validate themselves in __post_init__ so an invalid instance can never exist.
 @dataclass(frozen=True, slots=True)
 class AspectSpan:
     """One annotated aspect term inside an ``ExtractionRecord``.
@@ -53,6 +57,7 @@ class AspectSpan:
         """Reject spans with an empty term, bad offsets, or an invalid polarity."""
         if not self.term.strip():
             raise ValueError("span term must be a non-empty string")
+        # end is exclusive, so an empty or reversed span (end <= start) is always a bug.
         if self.start < 0 or self.end <= self.start:
             raise ValueError(
                 f"span offsets must satisfy 0 <= start < end, got {self.start}:{self.end}"
@@ -76,6 +81,7 @@ class ExtractionRecord:
         if not self.text.strip():
             raise ValueError("extraction record text must be a non-empty string")
         for span in self.spans:
+            # Re-slice the text with the offsets: catches off-by-one and shifted annotations.
             found = self.text[span.start : span.end]
             if found != span.term:
                 raise ValueError(
@@ -83,6 +89,7 @@ class ExtractionRecord:
                 )
 
 
+# Private validators shared by validate_record / validate_prediction below.
 def _require_non_empty_str(value: object, field: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field!r} must be a non-empty string")
@@ -101,6 +108,8 @@ def validate_record(
     A valid record is a mapping with non-empty string ``review`` and
     ``aspect`` fields and a ``sentiment`` drawn from ``allowed_labels``.
     """
+    # Check the container type and required keys first so the field checks below can
+    # index safely.
     if not isinstance(record, dict):
         raise ValueError(f"record must be a dict, got {type(record).__name__}")
     missing = [f for f in RECORD_FIELDS if f not in record]
@@ -127,6 +136,7 @@ def validate_prediction(
     if missing:
         raise ValueError(f"prediction record is missing fields: {missing}")
     _require_non_empty_str(record["review"], "review")
+    # An empty list is a legitimate answer ("no aspects found"), so only the type is checked here.
     predictions = record["predictions"]
     if not isinstance(predictions, list):
         raise ValueError(f"'predictions' must be a list, got {type(predictions).__name__}")

@@ -31,9 +31,12 @@ class SpanError:
 
 def _classify_errors(text: str, gold: Sequence[Span], pred: Sequence[Span]) -> list[SpanError]:
     """Return the errors for one sentence; exact matches are not errors."""
+    # Exact matches are correct and drop out; only the leftovers can be errors.
     gold_left = [span for span in gold if span not in pred]
     pred_left = [span for span in pred if span not in gold]
     errors: list[SpanError] = []
+    # Copy with list(): pred_left is mutated inside the loop. A leftover prediction that
+    # overlaps a leftover gold span is a "boundary" error (right place, wrong edges).
     for p_start, p_end in list(pred_left):
         overlapping = next((g for g in gold_left if max(g[0], p_start) < min(g[1], p_end)), None)
         if overlapping is not None:
@@ -47,6 +50,8 @@ def _classify_errors(text: str, gold: Sequence[Span], pred: Sequence[Span]) -> l
                     text[p_start:p_end],
                 )
             )
+    # Whatever is still unpaired: gold with no prediction = missed, prediction with no
+    # gold = spurious.
     errors.extend(SpanError("missed", text, text[s:e], "") for s, e in gold_left)
     errors.extend(SpanError("spurious", text, "", text[s:e]) for s, e in pred_left)
     return errors
@@ -63,6 +68,7 @@ def span_report(
     Exact match is the headline figure; overlap match shows how much of the loss is only a
     boundary problem. Errors are boundary (overlapping but not equal), missed and spurious.
     """
+    # Sort spans so greedy overlap matching is reproducible (see compute_span_counts).
     pred = [sorted(spans) for spans in predicted]
     exact = evaluate_extraction_spans(gold, pred, exact_match=True)
     overlap = evaluate_extraction_spans(gold, pred, exact_match=False)
@@ -82,5 +88,6 @@ def span_report(
         "exact": exact.to_dict(),
         "overlap": overlap.to_dict(),
         "error_counts": counts,
+        # Cap the examples so the report stays small even for large evaluation sets.
         "error_examples": [e.to_dict() for e in errors[:max_examples]],
     }

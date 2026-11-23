@@ -29,6 +29,8 @@ from absa.models.lstm_tokens import (
     tokenize,
 )
 
+# These imports are for type checkers/IDEs only (never executed at runtime). The real objects
+# are resolved lazily through __getattr__ at the bottom of this file.
 if TYPE_CHECKING:
     from absa.models.bert_classifier import (
         BertConfig,
@@ -130,6 +132,7 @@ __all__ = [
     "validate_aspect_predictions",
 ]
 
+# Maps each lazily exported name -> the submodule that defines it (see absa/_lazy.py).
 _LAZY = {
     "LocalLLMClient": "absa.models.llm_local",
     "ExtractorConfig": "absa.models.bert_extractor",

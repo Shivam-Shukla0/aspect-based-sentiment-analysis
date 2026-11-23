@@ -96,6 +96,8 @@ def save_checkpoint(
     path: Path, model: AbsaLstmModel, vocab: Vocabulary, config: LstmConfig
 ) -> None:
     """Save the model weights, vocabulary and config needed to reload the model."""
+    # The checkpoint bundles everything needed to rebuild the model elsewhere: weights, the
+    # vocabulary (token ids must match) and the config (architecture sizes).
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
@@ -110,6 +112,8 @@ def save_checkpoint(
 
 def load_checkpoint(path: Path) -> tuple[AbsaLstmModel, Vocabulary]:
     """Load a checkpoint written by ``save_checkpoint``, returning ``(model, vocab)``."""
+    # weights_only=True refuses to unpickle arbitrary objects: safer for files from others.
+    # map_location="cpu" lets a GPU-trained checkpoint load on a machine without a GPU.
     checkpoint = torch.load(path, weights_only=True, map_location="cpu")
     vocab = Vocabulary(checkpoint["vocab_tokens"])
     config = LstmConfig(**checkpoint["config"])
@@ -125,6 +129,8 @@ def load_checkpoint(path: Path) -> tuple[AbsaLstmModel, Vocabulary]:
 
 def _class_weights(records: Sequence[Mapping[str, object]]) -> Tensor:
     """Return balanced per-class loss weights, in ``SENTIMENT_LABELS`` order."""
+    # "Balanced" weight = total / (present_classes * class_count): rare classes get a larger
+    # weight so the loss does not just reward predicting the majority class.
     counts = [sum(1 for r in records if r["sentiment"] == label) for label in SENTIMENT_LABELS]
     present = sum(1 for count in counts if count > 0)
     total = sum(counts)
@@ -146,13 +152,17 @@ def _run_epoch(
     strings for every example seen, for metric computation. ``class_weights`` is
     applied to the loss only when training.
     """
+    # One function serves both phases: an optimizer means "train", None means "evaluate".
+    # train mode enables dropout; eval mode disables it.
     model.train(mode=optimizer is not None)
     total_loss = 0.0
     num_batches = 0
     y_true: list[str] = []
     y_pred: list[str] = []
     for cpu_batch in loader:
+        # Batches are built on CPU by the DataLoader and moved to the target device here.
         batch = {key: value.to(device) for key, value in cpu_batch.items()}
+        # Track gradients only while training; skipping them in validation saves memory/time.
         with torch.set_grad_enabled(optimizer is not None):
             logits: Tensor
             logits, _ = model(
@@ -162,14 +172,20 @@ def _run_epoch(
                 batch["aspect_lengths"],
             )
             loss: Tensor = nn.functional.cross_entropy(
-                logits, batch["label"], weight=class_weights if optimizer is not None else None
+                # Class weights apply to the training loss only, so validation loss stays comparable
+                # between runs with and without weighting.
+                logits,
+                batch["label"],
+                weight=class_weights if optimizer is not None else None,
             )
         if optimizer is not None:
+            # Standard step: clear old gradients, backpropagate, update the weights.
             optimizer.zero_grad()
             loss.backward()  # type: ignore[no-untyped-call]  # Tensor.backward lacks a full stub
             optimizer.step()
         total_loss += loss.item()
         num_batches += 1
+        # Keep labels as strings so the shared evaluate() function can score them.
         y_true.extend(SENTIMENT_LABELS[index] for index in batch["label"].tolist())
         y_pred.extend(SENTIMENT_LABELS[index] for index in logits.argmax(dim=-1).tolist())
     return total_loss / max(num_batches, 1), y_true, y_pred
@@ -188,8 +204,9 @@ def train(
     (the earliest such epoch on a tie), its vocabulary (built from
     ``train_records`` only) and the per-epoch history.
     """
-    set_seed(config.seed)
+    set_seed(config.seed)  # first, so weight init and shuffling are reproducible
     device = resolve_device(config.device)
+    # Vocabulary from TRAINING reviews only: building it on val/test text would leak information.
     vocab = Vocabulary.build([str(r["review"]) for r in train_records], min_freq=config.min_freq)
     model = AbsaLstmModel(
         vocab_size=len(vocab),
@@ -207,8 +224,10 @@ def train(
     )
     val_loader = make_dataloader(AspectDataset(val_records, vocab), vocab.pad_id, config.batch_size)
 
+    # Class weights are computed from the training split only, and only when requested.
     weights = _class_weights(train_records).to(device) if config.class_weighting else None
     history = []
+    # Model selection: remember the weights of the epoch with the best validation macro F1.
     best_f1 = float("-inf")
     best_state: dict[str, Tensor] = {}
     for epoch in range(1, config.epochs + 1):
@@ -216,9 +235,12 @@ def train(
         val_loss, val_true, val_pred = _run_epoch(model, val_loader, None, None, device)
         val_macro_f1 = evaluate(val_true, val_pred, labels=config.metric_labels).macro_f1
         history.append(EpochMetrics(epoch, train_loss, val_loss, val_macro_f1))
+        # Strict ">" keeps the EARLIEST epoch on ties. deepcopy is needed because state_dict()
+        # returns references that later epochs would overwrite.
         if val_macro_f1 > best_f1:
             best_f1 = val_macro_f1
             best_state = copy.deepcopy(model.state_dict())
+    # Restore the best epoch's weights (not the last epoch's) before returning.
     if best_state:
         model.load_state_dict(best_state)
     return model, vocab, tuple(history)
@@ -233,17 +255,20 @@ def run_training(
     which is the epoch reported as ``best_epoch``; ``history`` records every epoch.
     With ``config.drop_conflict`` the ``conflict`` records are removed first.
     """
+    # Optional protocol choice: remove the rare "conflict" class before splitting.
     if config.drop_conflict:
         records = [record for record in records if record["sentiment"] != "conflict"]
     train_records, val_records = split_train_val(
         records, val_fraction=config.val_fraction, seed=config.seed
     )
     model, vocab, history = train(train_records, val_records, config)
+    # max() returns the first maximal item, matching the "earliest epoch wins" rule in train().
     best = max(history, key=lambda epoch_metrics: epoch_metrics.val_macro_f1)
 
     checkpoint_path = output_dir / "lstm_checkpoint.pt"
     save_checkpoint(checkpoint_path, model, vocab, config)
 
+    # Human-readable run log next to the checkpoint, so every result can be traced to its config.
     log_path = output_dir / "lstm_training_log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(

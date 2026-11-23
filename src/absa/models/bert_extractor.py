@@ -40,6 +40,7 @@ from absa.reproducibility import set_seed
 
 MODEL_SUBDIR = "model"
 LOG_NAME = "extractor_training_log.json"
+# PyTorch's cross-entropy skips targets equal to -100, so masked positions add no loss.
 IGNORE_INDEX = -100
 Span = tuple[int, int]
 
@@ -85,6 +86,9 @@ class ExtractorResult:
 
 def align_labels(word_ids: Sequence[int | None], word_tags: Sequence[int]) -> list[int]:
     """Give each word's tag to its first word piece; mask special tokens and other pieces."""
+    # BERT splits a word into several word pieces ("keyboard" -> "key", "##board"), but our
+    # BIO tags are per WORD. Only the first piece gets the tag; all others are ignored in
+    # the loss. word_ids is None for special tokens ([CLS], [SEP], padding).
     labels: list[int] = []
     previous: int | None = None
     for word_id in word_ids:
@@ -100,6 +104,8 @@ def first_piece_tags(
     word_ids: Sequence[int | None], piece_tags: Sequence[int], n_words: int
 ) -> list[str]:
     """Read one tag per word from the prediction at its first word piece (``O`` if cut off)."""
+    # Inverse of align_labels: start with "O" for every word, so words cut off by
+    # truncation (no pieces left) default to "outside".
     tags = ["O"] * n_words
     previous: int | None = None
     for position, word_id in enumerate(word_ids):
@@ -113,6 +119,8 @@ def _encode(
     tokenizer: object, texts: Sequence[str], config: ExtractorConfig
 ) -> tuple[dict[str, Tensor], list[list[int | None]], list[int]]:
     """Tokenize ``texts`` as pre-split words; return tensors, word ids and word counts."""
+    # Pre-split into the same regex words the BIO tags were built on, so tags and word
+    # indices stay aligned; the tokenizer then only sub-splits into word pieces.
     words = [[t.token for t in tokenize_with_offsets(text)] for text in texts]
     encoded = tokenizer(  # type: ignore[operator]
         words,
@@ -122,6 +130,7 @@ def _encode(
         max_length=config.max_length,
         return_tensors="pt",
     )
+    # word_ids[i][j] = index of the word that piece j belongs to (None for special tokens).
     word_ids = [encoded.word_ids(i) for i in range(len(words))]
     return dict(encoded), word_ids, [len(w) for w in words]
 
@@ -134,6 +143,8 @@ def _train_loader(
     for sentence in sentences:
         try:
             tagged = build_bio_example(sentence.text, sentence.gold_spans)
+        # Gold spans that cannot be expressed as clean word tags are skipped (and counted
+        # in the return value) instead of training on wrong labels.
         except ValueError:  # overlapping or token-splitting gold spans
             continue
         examples.append((sentence.text, list(tagged.tag_ids)))
@@ -165,6 +176,7 @@ def predict_spans(
     model.eval()
     use_amp = config.bf16 and device.type == "cuda"
     spans: list[list[Span]] = []
+    # Predict in chunks so memory stays bounded for long input lists.
     for offset in range(0, len(texts), config.batch_size):
         chunk = texts[offset : offset + config.batch_size]
         tensors, word_ids, counts = _encode(tokenizer, chunk, config)
@@ -174,6 +186,8 @@ def predict_spans(
             torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp),
         ):
             logits = model(**batch).logits
+        # Highest-scoring tag per word piece; first_piece_tags then picks each word's tag, and
+        # decode_spans turns word tags back into character offsets of the original text.
         pieces = logits.argmax(dim=-1).tolist()
         for text, ids, tags, count in zip(chunk, word_ids, pieces, counts, strict=True):
             spans.append(decode_spans(text, first_piece_tags(ids, tags, count)))
@@ -188,6 +202,7 @@ def score_sentences(
 ) -> tuple[float, float, float]:
     """Return exact-match ``(precision, recall, f1)`` of the model on ``sentences``."""
     predicted = predict_spans(model, tokenizer, [s.text for s in sentences], config)
+    # Exact-match span metrics: the same protocol used for every extraction result.
     metrics = evaluate_extraction_spans([s.gold_spans for s in sentences], predicted)
     return metrics.precision, metrics.recall, metrics.f1
 
@@ -221,18 +236,20 @@ def train_extractor(
     history: list[ExtractorEpoch] = []
     best_f1, best_state = float("-inf"), {}
     for epoch in range(1, config.epochs + 1):
-        model.train()
+        model.train()  # enable dropout for the training pass
         losses: list[float] = []
         for cpu_batch in loader:
             batch = {key: value.to(device) for key, value in cpu_batch.items()}
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
                 loss = model(**batch).loss
+            # Per batch: clear gradients, backpropagate, clip, update weights, advance LR schedule.
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
             losses.append(float(loss.item()))
+        # Validation uses span F1 (not token accuracy): it is what the task is graded on.
         precision, recall, f1 = score_sentences(model, tokenizer, val_sentences, config)
         history.append(
             ExtractorEpoch(epoch, sum(losses) / max(len(losses), 1), precision, recall, f1)

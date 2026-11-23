@@ -48,6 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _load_sentences(data_dir: Path, domain: str, split: str) -> list[Sentence]:
     records = read_jsonl(data_dir / processed_filename(domain, split))
+    # Sentences with no aspect live in a side file (see data/normalize.py); include them if
+    # present so the extractor also sees (and is scored on) "nothing to extract" cases.
     no_aspect = data_dir / f"{domain}_{split}_no_aspect.jsonl"
     return group_sentences(records, read_jsonl(no_aspect) if no_aspect.exists() else [])
 
@@ -67,13 +69,17 @@ def end_to_end_report(
 
     model, tokenizer, labels = load_bert(classifier_dir)
     config = BertConfig(device=device, drop_conflict="conflict" not in labels)
+    # Step 1: turn every predicted span into a (review, aspect text) pair for the classifier.
     pairs = [
         {"review": s.text, "aspect": s.text[start:end]}
         for s, spans in zip(sentences, predicted, strict=True)
         for start, end in spans
     ]
+    # Step 2: classify all pairs in one batch, then hand the labels back out in the same
+    # order (an iterator) while rebuilding the per-sentence structure.
     labels_flat = iter(predict_bert(model, tokenizer, pairs, config) if pairs else [])
     pred_pairs = [[(start, end, next(labels_flat)) for start, end in spans] for spans in predicted]
+    # Gold side: "conflict" aspects are excluded because the classifier cannot predict them.
     gold_pairs = [
         [(start, end, label) for start, end, label in s.spans if label != "conflict"]
         for s in sentences
@@ -92,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         batch_size=args.batch_size,
         device=args.device,
     )
+    # Tune the learning rate on validation span F1 (training sentences only).
     runs = []
     for index, learning_rate in enumerate(args.lr):
         config = replace(base, learning_rate=learning_rate)
@@ -100,6 +107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"run {index}: lr {learning_rate} val span F1 {result.best_val_f1:.4f}")
     best_config, best = max(runs, key=lambda run: run[1].best_val_f1)
 
+    # Final one-time look at the test file with the chosen model.
     model, tokenizer = load_extractor(best.model_dir)
     test_sentences = _load_sentences(args.data_dir, args.domain, "test")
     predicted = predict_spans(model, tokenizer, [s.text for s in test_sentences], best_config)
@@ -121,6 +129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "test_exact": report["exact"],
         "test_overlap": report["overlap"],
     }
+    # Optional extra: end-to-end scoring only when a trained sentiment classifier is given.
     if args.classifier_dir is not None:
         summary["end_to_end"] = end_to_end_report(
             test_sentences, predicted, args.classifier_dir, args.device

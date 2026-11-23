@@ -50,7 +50,10 @@ def _find_unused(review: str, aspect: str, used: set[int]) -> tuple[int, int] | 
     so the returned offsets always index into ``review``. Starting positions already in
     ``used`` are skipped, so an aspect that is mentioned twice maps to two different spans.
     """
+    # Two passes: exact case first (most precise), then case-insensitive as a fallback for
+    # when the model changed the capitalisation of the aspect.
     for flags in (0, re.IGNORECASE):
+        # re.escape: aspect text is literal, so characters like "(" or "." must not act as regex.
         for match in re.finditer(re.escape(aspect), review, flags):
             if match.start() not in used:
                 return match.start(), match.end()
@@ -79,8 +82,10 @@ def validate_aspect_predictions(
         as "battery" and "battery life" both start at the same position, so only the first
         one listed is kept.
     """
+    # Use the caller's report if given (to accumulate statistics), else a throwaway one.
     rep = report if report is not None else ValidationReport()
     validated: list[ValidatedAspect] = []
+    # Start offsets already assigned, so two mentions of the same word map to two positions.
     used: set[int] = set()
 
     for item in raw_predictions:
@@ -88,6 +93,8 @@ def validate_aspect_predictions(
         aspect = item.get("aspect", "").strip()
         sentiment = item.get("sentiment", "").strip().lower()
 
+        # Each check below rejects the candidate and records why, instead of raising, so one
+        # bad item never discards the valid ones.
         if not aspect:
             rep.invalid_count += 1
             rep.errors.append("Empty aspect string")
@@ -106,6 +113,8 @@ def validate_aspect_predictions(
 
         start, end = span
         used.add(start)
+        # Use the text as it appears in the review (not the model's spelling) so offsets and
+        # text always agree.
         validated.append(
             ValidatedAspect(aspect=review[start:end], sentiment=sentiment, start=start, end=end)
         )
@@ -114,6 +123,7 @@ def validate_aspect_predictions(
     return validated
 
 
+# Errors worth retrying by default: service/network problems, not programming mistakes.
 TRANSIENT_ERRORS: tuple[type[Exception], ...] = (LLMClientError, OSError)
 
 
@@ -124,6 +134,7 @@ def _attempt(
     try:
         return generate_fn(), None
     except retry_on as err:
+        # The service said the request itself is wrong (e.g. 400/401): repeating it is pointless.
         if isinstance(err, LLMClientError) and not err.retryable:
             raise
         return None, err
@@ -154,9 +165,11 @@ def retry_llm_inference(
     last_err: Exception | None = None
     for attempt in range(1, max_retries + 1):
         result, err = _attempt(generate_fn, retry_on)
+        # Note: an empty list is a valid result; only None means "this attempt failed".
         if result is not None:
             return result
         last_err = err
+        # The final failed attempt is not a "retry", because nothing follows it.
         if attempt < max_retries:
             rep.retries_used += 1
         rep.errors.append(f"Attempt {attempt} failed: {err}")

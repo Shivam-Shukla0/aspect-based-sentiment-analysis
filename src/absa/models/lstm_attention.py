@@ -44,6 +44,7 @@ class LstmEncoder(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
+        # A bidirectional LSTM concatenates forward and backward states, doubling the width.
         self.output_size = hidden_size * (2 if bidirectional else 1)
         self.lstm = nn.LSTM(
             input_size=embedding_dim,
@@ -66,14 +67,21 @@ class LstmEncoder(nn.Module):
         output_size)`` and ``mask`` is a ``(batch, time)`` boolean tensor,
         true at real-token positions and false at padding.
         """
+        # Packing tells the LSTM each sequence's real length so it skips padding entirely.
+        # lengths must live on the CPU for pack_padded_sequence; enforce_sorted=False lets
+        # the batch stay in its original order.
         packed = pack_padded_sequence(
             embedded, lengths.cpu(), batch_first=True, enforce_sorted=False
         )
         packed_states, _ = self.lstm(packed)
+        # Unpack back to a regular padded tensor; total_length keeps the time dimension equal
+        # to the input even if the longest sequence in the batch is shorter.
         states, _ = pad_packed_sequence(
             packed_states, batch_first=True, total_length=embedded.size(1)
         )
         time_steps = embedded.size(1)
+        # Mask = "is this time step a real token?": compare each position index with the
+        # sequence length (broadcast over the batch).
         positions = torch.arange(time_steps, device=lengths.device).unsqueeze(0)
         mask = positions < lengths.unsqueeze(1)
         return states, mask
@@ -85,6 +93,7 @@ def masked_mean(states: Tensor, mask: Tensor) -> Tensor:
     ``states`` is ``(batch, time, hidden)`` and ``mask`` is ``(batch,
     time)``. Every row of ``mask`` must have at least one true position.
     """
+    # Zero out padding positions, sum, and divide by the number of real tokens (not by T).
     weights = mask.unsqueeze(-1).to(states.dtype)
     counts = weights.sum(dim=1)
     return (states * weights).sum(dim=1) / counts
@@ -121,11 +130,16 @@ class AspectAttention(nn.Module):
         and ``review_mask``/``aspect_mask`` are the matching ``(batch,
         time)`` boolean masks, all from ``LstmEncoder``.
         """
+        # 1) Summarise the aspect term into a single vector.
         aspect_repr = masked_mean(aspect_states, aspect_mask)
         projected_aspect = self.project_aspect(aspect_repr)
+        # 2) Score every review token against the aspect (dot product -> one number per token).
         scores = torch.einsum("bth,bh->bt", review_states, projected_aspect)
+        # 3) -inf at padding makes softmax give those positions exactly zero weight.
         scores = scores.masked_fill(~review_mask, float("-inf"))
         weights = torch.softmax(scores, dim=-1)
+        # 4) Attention-weighted sum of token states = aspect-specific review summary, which
+        # the linear layer then maps to class scores (logits).
         context = torch.einsum("bt,bth->bh", weights, review_states)
         logits = self.classifier(context)
         return logits, weights
@@ -137,9 +151,11 @@ def resolve_device(name: str = "auto") -> torch.device:
     Raises:
         ValueError: If ``name`` asks for CUDA but no CUDA device is available.
     """
+    # "auto" prefers a GPU when present; otherwise fall back to CPU.
     if name == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device(name)
+    # Fail early with a clear message rather than a late CUDA error mid-training.
     if device.type == "cuda" and not torch.cuda.is_available():
         raise ValueError(f"device {name!r} was requested but CUDA is not available")
     return device
@@ -193,6 +209,8 @@ class AbsaLstmModel(nn.Module):
 
         ``config.dropout`` is applied to the embeddings in training mode only.
         """
+        # The SAME embedding and encoder weights process both review and aspect, so the aspect
+        # vector lives in the same space as the review token states it is compared with.
         review_embedded = self.embedding_dropout(self.embedding(review_ids))
         aspect_embedded = self.embedding_dropout(self.embedding(aspect_ids))
         review_states, review_mask = self.encoder(review_embedded, review_lengths)

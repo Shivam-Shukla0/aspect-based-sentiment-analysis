@@ -3,9 +3,12 @@
 // Talks to the Flask backend: POST /predict with {"review": ..., "model": ..., "aspects": [...]}
 // answers {"review": ..., "predictions": [{"aspect": ..., "sentiment": ...}]}.
 // Failures answer {"error": "message"} with a 4xx or 5xx status.
+// Must match the labels the backend can return; anything else is shown with a neutral style.
 const SENTIMENTS = ["positive", "negative", "neutral", "conflict"];
+// Same limit as the server (app/server.py), checked here first to give instant feedback.
 const MAX_REVIEW_LENGTH = 2000;
 
+// Small helper that builds a DOM node; used everywhere instead of innerHTML for safety.
 function element(tag, className, text) {
     const node = document.createElement(tag);
     if (className) {
@@ -18,6 +21,7 @@ function element(tag, className, text) {
     return node;
 }
 
+// Each validate* function returns an error message, or "" when the input is fine.
 function validateReview(review) {
     if (!review.trim()) {
         return "Enter a review first.";
@@ -28,6 +32,7 @@ function validateReview(review) {
     return "";
 }
 
+// "battery life, screen" -> ["battery life", "screen"]: split on commas, trim, drop empties.
 function parseAspects(text) {
     return text
         .split(",")
@@ -39,6 +44,7 @@ function validateAspects(review, aspects) {
     if (aspects.length === 0) {
         return "Enter at least one aspect term.";
     }
+    // Case-insensitive check, mirroring the server: an aspect must occur in the review text.
     const missing = aspects.filter((term) => !review.toLowerCase().includes(term.toLowerCase()));
     if (missing.length > 0) {
         return "Not found in the review: " + missing.join(", ") + ".";
@@ -55,6 +61,7 @@ function renderPredictions(model, predictions) {
     }
     const list = element("ul", "aspect-list");
     for (const item of predictions) {
+        // The value becomes part of a CSS class name, so only known labels are allowed through.
         const sentiment = SENTIMENTS.includes(item.sentiment) ? item.sentiment : "neutral";
         const row = element("li");
         row.appendChild(element("span", "aspect", String(item.aspect)));
@@ -74,6 +81,8 @@ function renderError(model, message) {
     return card;
 }
 
+// Sends one request for one model and returns its predictions, or throws an Error whose
+// message is safe to show to the user (network problem, server error text, bad response).
 async function predict(review, model, aspects) {
     let response;
     try {
@@ -85,6 +94,7 @@ async function predict(review, model, aspects) {
     } catch (error) {
         throw new Error("Could not reach the server.");
     }
+    // The body may not be JSON (e.g. a proxy error page), so parsing is guarded.
     let payload = null;
     try {
         payload = await response.json();
@@ -103,6 +113,8 @@ async function predict(review, model, aspects) {
 
 async function analyse(review, models, aspects, results) {
     results.replaceChildren();
+    // allSettled (not all): one failing model must not hide the results of the others.
+    // The requests run in parallel, one per selected model.
     const settled = await Promise.allSettled(
         models.map((model) => predict(review, model, aspects)),
     );
@@ -121,6 +133,7 @@ function setStatus(status, message, isError) {
     status.className = isError ? "error" : "";
 }
 
+// Wires the form to the backend; called once when the page loads.
 function init() {
     const form = document.getElementById("review-form");
     const status = document.getElementById("status");
@@ -128,7 +141,7 @@ function init() {
     const submit = document.getElementById("submit");
 
     form.addEventListener("submit", async (event) => {
-        event.preventDefault();
+        event.preventDefault(); // handle the submit here instead of a full page reload
         const review = form.elements.review.value;
         const models = Array.from(form.querySelectorAll("input[name=model]:checked")).map(
             (box) => box.value,
@@ -143,20 +156,23 @@ function init() {
             return;
         }
         setStatus(status, "Analysing...", false);
-        submit.disabled = true;
+        submit.disabled = true; // prevent double submits while a request is running
         try {
             await analyse(review, models, aspects, results);
             setStatus(status, "", false);
         } finally {
+            // finally: re-enable the button even if something above threw.
             submit.disabled = false;
         }
     });
 }
 
+// Browser-only start-up; skipped when the file is loaded by the Node-based tests.
 if (typeof document !== "undefined") {
     init();
 }
 
+// Export the functions for tests; in a browser `module` does not exist, so this is skipped.
 if (typeof module !== "undefined") {
     module.exports = {
         validateReview,

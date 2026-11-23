@@ -77,24 +77,28 @@ def evaluate(
     zero rather than raising or warning. scikit-learn is imported here, not at
     module level, so importing this package does not require it.
     """
+    # Imported lazily so the package imports without scikit-learn installed.
     from sklearn.metrics import (  # noqa: PLC0415  (optional dependency, see docstring)
         accuracy_score,
         classification_report,
         precision_recall_fscore_support,
     )
 
+    # Guard inputs first: sklearn would otherwise fail with a less helpful message.
     if len(y_true) != len(y_pred):
         raise ValueError(
             f"y_true and y_pred must have the same length: {len(y_true)} != {len(y_pred)}"
         )
     if not y_true:
         raise ValueError("y_true and y_pred must not be empty")
-    labels = tuple(labels)
+    labels = tuple(labels)  # freeze so the order is fixed for every metric below
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=labels, zero_division=0
     )
     # One per-class call feeds both the per-class breakdown and macro F1;
     # micro F1 is a single scalar call.
+    # Macro F1 = unweighted mean of per-class F1: every class counts equally, so a rare
+    # class (e.g. "conflict") weighs as much as a frequent one. Micro F1 pools all samples.
     macro_f1 = sum(float(value) for value in f1) / len(f1) if len(f1) else 0.0
     micro_f1 = float(
         precision_recall_fscore_support(

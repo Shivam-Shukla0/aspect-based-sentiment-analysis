@@ -31,12 +31,18 @@ def split_train_val(
     """
     if not 0 < val_fraction < 1:
         raise ValueError(f"val_fraction must be strictly between 0 and 1, got {val_fraction}")
+    # Unit of splitting = unique normalised review text, never an individual record.
+    # sorted() first makes the order independent of set iteration, so the seeded
+    # shuffle below is reproducible across runs and platforms.
     groups = sorted({normalise_review(str(record["review"])) for record in records})
+    # A private Random instance: does not disturb (or depend on) the global RNG state.
     rng = random.Random(seed)  # noqa: S311
     rng.shuffle(groups)
+    # max(1, ...) guarantees a non-empty validation set even for very small inputs.
     cut = max(1, round(len(groups) * val_fraction))
     val_groups = set(groups[:cut])
     train = [r for r in records if normalise_review(str(r["review"])) not in val_groups]
     val = [r for r in records if normalise_review(str(r["review"])) in val_groups]
+    # Safety net: proves the grouping worked before the split is handed to callers.
     assert_no_leakage(train, val)
     return train, val

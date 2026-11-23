@@ -41,11 +41,15 @@ def normalize_sentences(
     records: list[dict[str, object]] = []
     no_aspect: list[dict[str, object]] = []
     for sentence in sentences:
+        # Sentences without any aspect-term annotation cannot become (review, aspect) records,
+        # but are kept in a side file so no data is silently lost.
         if not sentence.spans:
             no_aspect.append(
                 {"sentence_id": sentence.sentence_id, "domain": domain, "review": sentence.text}
             )
             continue
+        # One record per annotated aspect: a sentence with 3 aspects yields 3 records that
+        # share the same review text (hence the grouped split in data/splits.py).
         for span in sentence.spans:
             record: dict[str, object] = {
                 "review": sentence.text,
@@ -56,7 +60,7 @@ def normalize_sentences(
                 "start": span.start,
                 "end": span.end,
             }
-            validate_record(record)
+            validate_record(record)  # fail fast if the parser ever emits a bad record
             records.append(record)
     return records, no_aspect
 
@@ -66,6 +70,7 @@ def write_jsonl(records: Sequence[dict[str, object]], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for record in records:
+            # sort_keys makes output byte-identical across runs (clean diffs, idempotent builds).
             handle.write(json.dumps(record, sort_keys=True))
             handle.write("\n")
 
