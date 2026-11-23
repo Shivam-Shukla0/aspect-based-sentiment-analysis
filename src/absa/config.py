@@ -18,6 +18,14 @@ SPLITS = ("train", "val", "test")
 
 # SemEval-2014 Task 4 polarity labels. "conflict" is kept in the schema;
 # experiments that drop it must say so explicitly (see data/README.md).
+# Dataset: SemEval-2014 Task 4, laptop and restaurant reviews in XML, where each aspect term has
+# character offsets and a polarity (positive, negative, neutral, conflict). Training records:
+# 2,358 laptop and 3,693 restaurant; test records after removing conflict: 638 and 1,120. Each
+# domain has 800 test sentences, including sentences without any aspect.
+#
+# Why conflict is dropped in the experiments: it is very rare (e.g. 45 of 2,358 laptop training
+# records), so a model cannot learn it reliably, and the standard SemEval-2014 protocol drops
+# it. Results are therefore three-class and not directly comparable with work that keeps it.
 SENTIMENT_LABELS = ("positive", "negative", "neutral", "conflict")
 
 # Single default seed used everywhere (splits, set_seed) so runs are comparable.

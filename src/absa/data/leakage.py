@@ -26,6 +26,9 @@ def find_overlap(
     return train_reviews & test_reviews
 
 
+# Why the test set is read only once: if hyperparameters or epochs were chosen by looking at
+# test scores, the test score would become optimistically biased: it would measure how well
+# we tuned to that set, not generalisation. All choices use validation macro F1 only.
 def assert_no_leakage(
     train: Iterable[Mapping[str, object]], test: Iterable[Mapping[str, object]]
 ) -> None:

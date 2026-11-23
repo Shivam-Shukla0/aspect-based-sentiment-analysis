@@ -38,6 +38,21 @@ MODEL_SUBDIR = "model"
 LOG_NAME = "bert_training_log.json"
 
 
+# Model summary: bert-base-uncased as a sentence-pair classifier, [CLS] review [SEP] aspect
+# [SEP], with a classification layer on [CLS] giving three outputs. AdamW (weight decay 0.01),
+# linear schedule with 10% warm-up, gradient clipping 1.0, 4 epochs, batch 32, max length 128
+# (only the review is truncated), bfloat16 on the GPU, best epoch kept. The learning rate was
+# chosen from 2, 3, 5 x 1e-5; 5e-5 was best.
+#
+# Why BERT beats the LSTM: BERT is pre-trained on huge text corpora, so it already knows word
+# meaning, negation and context; fine-tuning only adapts it. The LSTM starts from random word
+# vectors and learns only from 2-4 thousand examples. Test accuracy BERT 0.759/0.829 vs. LSTM
+# 0.599/0.715 (laptop/restaurant), about 16 and 11 points better.
+#
+# Why the sentence-pair format: putting the aspect as a second segment lets BERT's
+# self-attention directly relate the aspect tokens to the review tokens, so the same review can
+# get different labels for different aspects. This formulation is known to work well for ABSA
+# (Sun et al., 2019).
 @dataclass(frozen=True, slots=True)
 class BertConfig:
     """Hyperparameters for fine-tuning a BERT sentence-pair classifier.

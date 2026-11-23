@@ -29,6 +29,10 @@ def split_train_val(
     SemEval contains. The split is deterministic for a given ``seed``, and
     is checked with ``absa.data.leakage.assert_no_leakage`` before being returned.
     """
+    # No-leakage design: the validation split (20% of training in the experiments) groups records
+    # by normalised review text, so two aspects of the same sentence, or duplicate sentences,
+    # never fall on both sides. assert_no_leakage below raises if any review text is shared.
+    # The official test set is used only once, after all choices are fixed.
     if not 0 < val_fraction < 1:
         raise ValueError(f"val_fraction must be strictly between 0 and 1, got {val_fraction}")
     # Unit of splitting = unique normalised review text, never an individual record.

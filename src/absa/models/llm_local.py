@@ -13,6 +13,10 @@ from typing import Any
 from absa.models.lstm_attention import resolve_device
 
 
+# How the LLM approach runs without an API key: the open-weights model Qwen2.5-7B-Instruct runs
+# on the Colab GPU with the transformers library, using a versioned few-shot prompt (v1.0) and
+# greedy decoding (max 256 new tokens). Greedy decoding makes results reproducible. Every raw
+# answer is saved, so scores can be recomputed without the model; cost is not applicable.
 class LocalLLMClient:
     """Chat model loaded with ``transformers``; no API key and no network call at run time."""
 

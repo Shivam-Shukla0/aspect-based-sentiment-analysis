@@ -79,6 +79,9 @@ def split_sentences(
     return train, val
 
 
+# Invalid sequences such as I-ASP after O are repaired: an I-ASP that does not continue a span
+# starts a new span (treated as B-ASP). This makes decoding deterministic and it never crashes
+# on bad sequences.
 def repair_tags(tags: Sequence[str]) -> list[str]:
     """Make a tag sequence valid: an ``I-ASP`` that does not continue a span starts one."""
     repaired: list[str] = []

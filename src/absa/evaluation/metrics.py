@@ -65,6 +65,15 @@ class EvaluationResult:
         path.write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
+# Imbalance: positive is 53.4% of laptop and 65.0% of restaurant test records, so always
+# answering positive already gets that accuracy. Macro F1 (the average of per-class F1) treats
+# each class equally, and results are compared against this majority baseline. A class-weighted
+# loss was also tried for the LSTM; the best validation setting was the unweighted one.
+#
+# Metrics per task: sentiment uses accuracy and macro F1 with per-class precision, recall, F1
+# and a confusion matrix. Extraction uses precision, recall, F1 by exact span match (start and
+# end must match), plus overlap match as a looser figure. End-to-end counts a prediction only
+# if span and sentiment both match.
 def evaluate(
     y_true: Sequence[str], y_pred: Sequence[str], labels: Sequence[str] = SENTIMENT_LABELS
 ) -> EvaluationResult:

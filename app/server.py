@@ -114,6 +114,10 @@ def _parse(payload: object) -> tuple[str, str, list[str]] | str:
     return review, model.strip().lower(), [a.strip() for a in aspects]
 
 
+# How the demo works: a Flask backend serves a web page and POST /predict with the review, model
+# name and aspect terms. It validates input (400 for bad input, 404 unknown model, 422 aspect
+# not in review, 503 missing checkpoint) and loads each model once, then reuses it. The page
+# shows one card per selected model.
 class _Service:
     """Holds the model registry and the models loaded so far."""
 

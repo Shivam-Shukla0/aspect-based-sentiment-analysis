@@ -23,6 +23,24 @@ from typing import cast
 from absa.config import DOMAINS, OUTPUTS_DIR
 
 # One long-format row per (setting, approach, domain, metric); easy to filter in a CSV.
+# Main sentiment results (test accuracy / macro F1): LSTM 0.599 / 0.508 (laptop), 0.715 / 0.573
+# (restaurant); BERT 0.759 / 0.698 (laptop), 0.829 / 0.729 (restaurant). Majority-baseline
+# accuracy is 0.534 and 0.650, so the LSTM is only about 6.5 points above it.
+#
+# Hardest class: neutral has the lowest F1 for both models (BERT 0.517 laptop, 0.506
+# restaurant, recall about 0.4). Neutral mentions are often factual statements surrounded by
+# opinions, so the model copies the sentiment of nearby words. 100 of 154 BERT laptop errors
+# and 117 of 192 restaurant errors have a true neutral label; laptops lean neutral->negative,
+# restaurants neutral->positive.
+#
+# Reliability: each setting is one run with seed 42. An earlier run of the same code gave BERT
+# macro F1 0.715/0.740 vs. 0.698/0.729 now, so differences of 1-2 points are within run-to-run
+# noise. Large gaps (BERT vs. LSTM, extractor vs. LLM) are reliable. The data came from a public
+# mirror, so results should be re-checked on the official files.
+#
+# Hardware: training ran on Google Colab GPUs (the final notebook run on an NVIDIA L4; earlier
+# runs on an A100). Six notebooks (data exploration, LSTM, BERT, LLM prompting, extraction, LLM
+# benchmark) call the same tested scripts and are committed with their outputs.
 COLUMNS = ("setting", "approach", "domain", "metric", "value", "source")
 Row = dict[str, str]
 

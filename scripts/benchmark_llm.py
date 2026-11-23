@@ -61,6 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Handling invalid LLM output: the answer must be a JSON list of {aspect, sentiment}. It is
+# parsed; each aspect must appear in the review and have a valid label. Unparsable answers and
+# invalid aspects are counted and treated as errors, not silently removed. In the reported run
+# all 1,600 answers were valid JSON, but 29 (laptop) and 34 (restaurant) aspects were rejected.
+#
+# Results (exact-match extraction F1): BERT extractor 0.781 (laptop) and 0.877 (restaurant);
+# prompted LLM 0.493 and 0.699. The fine-tuned extractor learns the annotators' exact
+# conventions; the LLM names many terms that were not annotated (404 and 238 spurious
+# aspects), which lowers precision. End to end (F1): LLM alone 0.411 and 0.623.
 def interpret(sentence: Sentence, raw: str) -> tuple[tuple[Pair, ...], bool, int]:
     """Parse and validate one answer; return the pairs, whether parsing failed, invalid count."""
     # Two-stage check: (1) is the reply valid JSON of the expected shape? (2) do the aspects

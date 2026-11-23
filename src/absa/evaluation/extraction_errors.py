@@ -57,6 +57,15 @@ def _classify_errors(text: str, gold: Sequence[Span], pred: Sequence[Span]) -> l
     return errors
 
 
+# Error types analysed: boundary (prediction overlaps the gold span but is not equal), missed
+# (gold aspect not predicted) and spurious (predicted aspect not in gold). Counts as
+# boundary/missed/spurious: extractor 70/89/49 on laptops and 73/51/85 on restaurants; LLM
+# 95/182/404 and 83/269/238.
+#
+# End-to-end results and their limit: extractor + BERT classifier F1 0.591 (laptop), 0.726
+# (restaurant). Extraction is the bottleneck: every missed or wrongly bounded span is lost
+# before classification. The extractor's overlap F1 (0.891/0.941) is far above its exact F1,
+# so many errors are boundary errors ("price" instead of "price tag").
 def span_report(
     texts: Sequence[str],
     gold: Sequence[Sequence[Span]],

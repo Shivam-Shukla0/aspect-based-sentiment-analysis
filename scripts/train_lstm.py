@@ -38,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Tuning notes: grid of embedding dropout {0, 0.3, 0.5} x learning rate {0.001, 0.003}, hidden
+# size 128, up to 40 epochs. Dropout 0.5 with lr 0.001 was best in both domains (validation
+# macro F1 0.608 laptop, 0.600 restaurant vs. about 0.57 without dropout). The best epochs were
+# 34 and 37 of 40, so training had not fully converged.
 def _grid(args: argparse.Namespace) -> list[LstmConfig]:
     # Translate the CLI choice into the concrete values to try for class weighting.
     weightings = {"off": (False,), "on": (True,), "both": (False, True)}[args.weighting]

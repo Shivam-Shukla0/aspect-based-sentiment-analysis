@@ -84,6 +84,11 @@ class ExtractorResult:
     model_dir: Path
 
 
+# How the extractor works: token classification with BIO tags: O (outside), B-ASP (beginning of
+# an aspect), I-ASP (inside). BERT splits words into word pieces; each word's tag is placed on
+# its first piece and the other pieces and special tokens are ignored in the loss (label -100).
+# At prediction time the tag of each word is read from its first piece and decoded back to
+# character offsets. It was trained 5 epochs with a learning rate chosen from 3 and 5 x 1e-5.
 def align_labels(word_ids: Sequence[int | None], word_tags: Sequence[int]) -> list[int]:
     """Give each word's tag to its first word piece; mask special tokens and other pieces."""
     # BERT splits a word into several word pieces ("keyboard" -> "key", "##board"), but our

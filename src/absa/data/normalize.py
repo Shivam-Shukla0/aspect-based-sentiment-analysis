@@ -38,6 +38,10 @@ def normalize_sentences(
     sentences that carried no aspect-term annotation at all, kept rather
     than dropped.
     """
+    # Sentences with no aspect are kept on purpose: for extraction and end-to-end evaluation the
+    # model must also learn, and be tested on, saying "no aspect here". Dropping them would hide
+    # false positives. They are stored in separate files and used for the extractor and the
+    # LLM benchmark.
     records: list[dict[str, object]] = []
     no_aspect: list[dict[str, object]] = []
     for sentence in sentences:

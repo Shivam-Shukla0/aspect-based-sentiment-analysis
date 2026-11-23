@@ -99,6 +99,16 @@ def masked_mean(states: Tensor, mask: Tensor) -> Tensor:
     return (states * weights).sum(dim=1) / counts
 
 
+# Model summary: reviews and aspects are lower-cased and tokenised; the vocabulary comes from
+# training data only. 100-dimensional randomly initialised embeddings feed a bidirectional
+# LSTM. The aspect is summarised by the mean of its hidden states; a learned linear map of it
+# is dot-producted with every review hidden state, padding is masked, softmax gives attention
+# weights, and the weighted sum of review states goes to a linear classifier. Trained with Adam
+# and cross-entropy, batch 32, keeping the epoch with the best validation macro F1.
+#
+# Role of attention: a review can talk about several aspects. Aspect-driven attention lets the
+# model weight the words that matter for the given aspect (e.g. "weak" for battery,
+# "excellent" for screen) instead of using one summary of the whole sentence.
 class AspectAttention(nn.Module):
     """Scores review tokens against an aspect representation and classifies.
 
