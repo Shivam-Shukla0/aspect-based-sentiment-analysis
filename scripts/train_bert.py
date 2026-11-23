@@ -46,6 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = args.output_dir or OUTPUTS_DIR / f"bert_{args.domain}"
     train_records = read_jsonl(args.data_dir / processed_filename(args.domain, "train"))
+    # Shared settings; only the learning rate varies between runs (via dataclasses.replace).
     base = BertConfig(
         model_name=args.model_name,
         epochs=args.epochs,
@@ -54,14 +55,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         device=args.device,
     )
 
+    # Tune on validation data only; the test file is not touched during this loop.
     runs = []
     for index, learning_rate in enumerate(args.lr):
         config = replace(base, learning_rate=learning_rate)
         result = run_bert_training(train_records, config, output_dir=output_dir / f"run_{index}")
         runs.append((config, result))
         print(f"run {index}: lr {learning_rate} val macro F1 {result.best_val_macro_f1:.4f}")
+    # Best run = highest validation macro F1.
     best_config, best = max(runs, key=lambda run: run[1].best_val_macro_f1)
 
+    # Single, final test evaluation with the chosen model ("conflict" removed as in training).
     model, tokenizer, _ = load_bert(best.model_dir)
     test_records = [
         record

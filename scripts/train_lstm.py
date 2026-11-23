@@ -39,7 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _grid(args: argparse.Namespace) -> list[LstmConfig]:
+    # Translate the CLI choice into the concrete values to try for class weighting.
     weightings = {"off": (False,), "on": (True,), "both": (False, True)}[args.weighting]
+    # Grid search: itertools.product builds every combination of the hyperparameter lists,
+    # one LstmConfig per combination. Other settings stay fixed for fair comparison.
     return [
         LstmConfig(
             embedding_dim=100,
@@ -64,13 +67,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_dir = args.output_dir or OUTPUTS_DIR / f"lstm_{args.domain}"
     train_records = read_jsonl(args.data_dir / processed_filename(args.domain, "train"))
 
+    # Phase 1 (tuning): train each setting and judge it ONLY on validation data.
     runs = []
     for index, config in enumerate(_grid(args)):
         result = run_training(train_records, config, output_dir=output_dir / f"run_{index}")
         runs.append((config, result))
         print(f"run {index}: {asdict(config)} val macro F1 {result.best_val_macro_f1:.4f}")
+    # Pick the winner by validation macro F1; the test set plays no role in this choice.
     best_config, best = max(runs, key=lambda run: run[1].best_val_macro_f1)
 
+    # Phase 2: only now open the test file, once, with the already-chosen model.
+    # "conflict" is dropped to match training (usual SemEval-2014 protocol).
     model, vocab = load_checkpoint(best.checkpoint_path)
     test_records = [
         record
@@ -81,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         model, vocab, test_records, labels=best_config.metric_labels, device=args.device
     )
     report.save(output_dir / "test_report.json")
+    # Everything needed to reproduce and compare this run, in one JSON file.
     summary = {
         "domain": args.domain,
         "train_records": len(train_records),

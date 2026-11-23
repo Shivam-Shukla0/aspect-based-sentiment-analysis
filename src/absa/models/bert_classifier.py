@@ -96,20 +96,26 @@ def _loader(
     shuffle: bool,
 ) -> DataLoader[dict[str, Tensor]]:
     """Build a loader that tokenizes each batch as (review, aspect) pairs."""
+    # Label name -> head output index; must match config.labels (and thus id2label on load).
     label_ids = {label: index for index, label in enumerate(config.labels)}
     generator = torch.Generator()
     generator.manual_seed(config.seed)
 
+    # Tokenization happens per batch (not up front): padding then adapts to each batch's
+    # longest pair instead of a global maximum.
     def collate(batch: list[Mapping[str, object]]) -> dict[str, Tensor]:
         encoded = tokenizer(  # type: ignore[operator]
             [str(record["review"]) for record in batch],
             [str(record["aspect"]) for record in batch],
             padding=True,
+            # Two segments: [CLS] review [SEP] aspect [SEP]. Truncating only the review keeps
+            # the short aspect intact (it is the thing being classified).
             truncation="only_first",
             max_length=config.max_length,
             return_tensors="pt",
         )
         tensors: dict[str, Tensor] = dict(encoded)
+        # Labels are optional so the same loader serves training and label-free prediction.
         if all("sentiment" in record for record in batch):
             tensors["labels"] = torch.tensor(
                 [label_ids[str(record["sentiment"])] for record in batch], dtype=torch.long
@@ -136,6 +142,7 @@ def _run_epoch(
     training = optimization is not None
     model.train(mode=training)
     labels = config.labels
+    # bf16 autocast only makes sense on CUDA; elsewhere it is silently disabled.
     use_amp = config.bf16 and device.type == "cuda"
     total_loss, batches = 0.0, 0
     y_true: list[str] = []
@@ -146,14 +153,16 @@ def _run_epoch(
             torch.set_grad_enabled(training),
             torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp),
         ):
+            # Passing "labels" makes the HF model compute the cross-entropy loss itself.
             output = model(**batch)
         if optimization is not None:
             optimizer, scheduler = optimization
             optimizer.zero_grad()
             output.loss.backward()
+            # Clip the gradient norm to 1.0: avoids rare exploding updates when fine-tuning.
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            scheduler.step()
+            scheduler.step()  # the LR schedule advances per BATCH, not per epoch
         total_loss += float(output.loss.item())
         batches += 1
         y_true.extend(labels[index] for index in batch["labels"].tolist())
@@ -174,6 +183,8 @@ def train_bert(
     set_seed(config.seed)
     device = resolve_device(config.device)
     labels = config.labels
+    # Pretrained weights come from the Hugging Face hub; the classification head on top is
+    # new and randomly initialised, which is what fine-tuning then trains.
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
     model = AutoModelForSequenceClassification.from_pretrained(
         config.model_name,
@@ -186,6 +197,8 @@ def train_bert(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
+    # Linear warm-up (first warmup_ratio of the steps) then linear decay to zero: the usual
+    # BERT fine-tuning schedule. max(..., 1) avoids a zero-step schedule on empty data.
     total_steps = max(config.epochs * len(train_loader), 1)
     scheduler = get_linear_schedule_with_warmup(  # type: ignore[no-untyped-call]
         optimizer, int(total_steps * config.warmup_ratio), total_steps
@@ -201,6 +214,7 @@ def train_bert(
         history.append(BertEpoch(epoch, train_loss, val_loss, result.accuracy, result.macro_f1))
         if result.macro_f1 > best_f1:
             best_f1 = result.macro_f1
+            # Copy to CPU so keeping the best weights does not occupy extra GPU memory.
             best_state = copy.deepcopy({k: v.cpu() for k, v in model.state_dict().items()})
     if best_state:
         model.load_state_dict(best_state)
@@ -223,6 +237,8 @@ def run_bert_training(
     model, tokenizer, history = train_bert(train_records, val_records, config)
     best = max(history, key=lambda epoch: epoch.val_macro_f1)
 
+    # save_pretrained writes weights + config; the tokenizer goes in the same directory so
+    # load_bert needs a single path.
     model_dir = output_dir / MODEL_SUBDIR
     model_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(model_dir)  # type: ignore[operator]
@@ -241,6 +257,7 @@ def load_bert(model_dir: Path) -> tuple[torch.nn.Module, object, tuple[str, ...]
     """Load a model saved by ``run_bert_training``; returns ``(model, tokenizer, labels)``."""
     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    # Recover the label order from the saved config so predictions use the training-time ids.
     id2label = model.config.id2label
     labels = tuple(id2label[index] for index in sorted(id2label))
     return model, tokenizer, labels
@@ -261,6 +278,7 @@ def predict_bert(
     use_amp = config.bf16 and device.type == "cuda"
     with torch.no_grad():
         for cpu_batch in _loader(records, tokenizer, config, shuffle=False):
+            # Drop "labels" if present: prediction must not depend on gold answers.
             batch = {key: value.to(device) for key, value in cpu_batch.items() if key != "labels"}
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
                 logits = model(**batch).logits

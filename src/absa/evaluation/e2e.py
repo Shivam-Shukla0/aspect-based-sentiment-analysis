@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from absa.config import SENTIMENT_LABELS
 
+# (start_char, end_char, sentiment): the unit scored in end-to-end evaluation.
 AspectSentimentPair = tuple[int, int, str]
 
 
@@ -64,6 +65,7 @@ def evaluate_given_aspect_classification(
             f"{len(gold_labels)} != {len(pred_labels)}"
         )
 
+    # Accuracy: fraction of positions where the predicted label equals the gold label.
     correct = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == p)
     accuracy = correct / len(gold_labels)
 
@@ -71,6 +73,8 @@ def evaluate_given_aspect_classification(
     f1_scores: list[float] = []
 
     for lbl in labels:
+        # One-vs-rest counts for this label: tp = predicted and gold are both lbl,
+        # fp = predicted lbl but gold differs, fn = gold is lbl but prediction differs.
         tp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == lbl and p == lbl)
         fp = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g != lbl and p == lbl)
         fn = sum(1 for g, p in zip(gold_labels, pred_labels, strict=True) if g == lbl and p != lbl)
@@ -84,6 +88,8 @@ def evaluate_given_aspect_classification(
             "recall": rec,
             "f1": f1,
         }
+        # Only classes that actually occur in the gold labels enter the macro average;
+        # absent classes would otherwise drag it down with meaningless zeros.
         if (tp + fn) > 0:
             f1_scores.append(f1)
 
@@ -120,6 +126,8 @@ def evaluate_end_to_end(
     total_fn = 0
 
     for gold_pairs, pred_pairs in zip(gold_pairs_list, pred_pairs_list, strict=True):
+        # A prediction is correct only if span boundaries AND sentiment both equal a gold
+        # pair; each gold pair can be matched once (greedy one-to-one).
         matched_gold: set[int] = set()
         tp = 0
 
@@ -136,6 +144,7 @@ def evaluate_end_to_end(
         total_fp += len(pred_pairs) - tp
         total_fn += len(gold_pairs) - tp
 
+    # Micro-averaged totals over all sentences, zero-guarded like the extraction metrics.
     denom_p = total_tp + total_fp
     denom_r = total_tp + total_fn
     precision = total_tp / denom_p if denom_p > 0 else 0.0

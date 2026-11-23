@@ -38,6 +38,8 @@ def group_sentences(
     Records need ``review``, ``sentence_id``, ``start``, ``end`` and ``sentiment``; sentences
     keep the order in which they first appear.
     """
+    # Records are per aspect, but extraction is per sentence: gather all aspects of the same
+    # (sentence_id, text) pair. dict preserves first-seen order.
     grouped: dict[tuple[str, str], list[tuple[int, int, str]]] = {}
     for record in records:
         key = (str(record["sentence_id"]), str(record["review"]))
@@ -45,11 +47,13 @@ def group_sentences(
             (int(str(record["start"])), int(str(record["end"])), str(record["sentiment"]))
         )
     sentences = [Sentence(sid, text, tuple(spans)) for (sid, text), spans in grouped.items()]
+    # Sentences with no aspect still matter: the extractor must learn to output nothing.
     sentences.extend(Sentence(str(r["sentence_id"]), str(r["review"])) for r in no_aspect)
     return sentences
 
 
 def _normalized(text: str) -> str:
+    # Same normalisation idea as absa.data.leakage: case and whitespace do not make a new text.
     return re.sub(r"\s+", " ", text.strip().lower())
 
 
@@ -63,11 +67,13 @@ def split_sentences(
     """
     if not 0 < val_fraction < 1:
         raise ValueError(f"val_fraction must be between 0 and 1, got {val_fraction}")
+    # Split by unique text (sorted first for a reproducible shuffle), like data/splits.py.
     texts = sorted({_normalized(s.text) for s in sentences})
     random.Random(seed).shuffle(texts)  # noqa: S311  (a reproducible split, not security)
     val_texts = set(texts[: max(1, round(len(texts) * val_fraction))])
     train = [s for s in sentences if _normalized(s.text) not in val_texts]
     val = [s for s in sentences if _normalized(s.text) in val_texts]
+    # Tiny inputs can round to an empty side; fail clearly rather than train on nothing.
     if not train or not val:
         raise ValueError("the split left the train or the validation side empty")
     return train, val
@@ -77,6 +83,8 @@ def repair_tags(tags: Sequence[str]) -> list[str]:
     """Make a tag sequence valid: an ``I-ASP`` that does not continue a span starts one."""
     repaired: list[str] = []
     for tag in tags:
+        # An I-ASP at the sequence start or after O is invalid BIO; treat it as the start of
+        # a new span (the common, lenient fix used when decoding model output).
         starts_span = tag == "I-ASP" and (not repaired or repaired[-1] == "O")
         repaired.append("B-ASP" if starts_span else tag)
     return repaired
@@ -95,5 +103,6 @@ def decode_spans(text: str, tags: Sequence[str]) -> list[Span]:
     tokens = tokenize_with_offsets(text)
     if len(tags) > len(tokens):
         raise ValueError(f"got {len(tags)} tags for {len(tokens)} tokens")
+    # Truncated inputs yield fewer tags than tokens; pad the tail with "O" (no aspect).
     padded = [*tags, *["O"] * (len(tokens) - len(tags))]
     return spans_from_tags(tokens, repair_tags(padded))

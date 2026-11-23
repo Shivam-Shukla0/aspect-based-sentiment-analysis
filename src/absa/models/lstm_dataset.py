@@ -28,6 +28,7 @@ class AspectDataset(Dataset[dict[str, Tensor]]):
         """Wrap ``records`` (each needing ``review``, ``aspect`` and ``sentiment``)."""
         self._records = records
         self._vocab = vocab
+        # Label name -> class index (the order of ``labels`` defines the output classes).
         self._label_index = {label: index for index, label in enumerate(labels)}
 
     def __len__(self) -> int:
@@ -36,6 +37,7 @@ class AspectDataset(Dataset[dict[str, Tensor]]):
 
     def __getitem__(self, index: int) -> dict[str, Tensor]:
         """Return the encoded review ids, aspect ids and label for one record."""
+        # Encoding happens lazily per item, so no large tensors are held in memory up front.
         record = self._records[index]
         review_ids = self._vocab.encode(tokenize(str(record["review"])))
         aspect_ids = self._vocab.encode(tokenize(str(record["aspect"])))
@@ -47,8 +49,11 @@ class AspectDataset(Dataset[dict[str, Tensor]]):
         }
 
 
+# Helper for collate(): turns a list of 1-D tensors with different lengths into one
+# rectangular (batch, max_len) tensor filled with pad_id, plus the true lengths.
 def _pad_stack(sequences: Sequence[Tensor], pad_id: int) -> tuple[Tensor, Tensor]:
     lengths = torch.tensor([len(seq) for seq in sequences], dtype=torch.long)
+    # Pad only to the longest sequence in THIS batch (not a global maximum): less wasted compute.
     max_len = int(lengths.max().item()) if sequences else 0
     padded = torch.full((len(sequences), max_len), pad_id, dtype=torch.long)
     for row, seq in enumerate(sequences):
@@ -85,6 +90,8 @@ def make_dataloader(
     seed: int = RANDOM_SEED,
 ) -> DataLoader[dict[str, Tensor]]:
     """Build a ``DataLoader`` with seeded shuffling and this project's collate function."""
+    # Dedicated seeded generator: the shuffle order is reproducible and independent of the
+    # global torch RNG state.
     generator = torch.Generator()
     generator.manual_seed(seed)
     return DataLoader(

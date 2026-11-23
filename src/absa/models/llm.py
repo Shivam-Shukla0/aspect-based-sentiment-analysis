@@ -35,9 +35,11 @@ class MockLLMClient:
     def generate(self, prompt: str) -> str:
         """Return registered or default response."""
         self.prompts_received.append(prompt)
+        # Record every prompt so tests can assert exactly what would have been sent.
         return self.responses.get(prompt, self.default_response)
 
 
+# Status codes that mean "try again later" (rate limit / server-side problem).
 _HTTP_TOO_MANY_REQUESTS = 429
 _HTTP_SERVER_ERROR = 500
 
@@ -72,6 +74,7 @@ class HttpLLMClient:
                 not valid chat-completion JSON, or a reply without text. Its ``retryable``
                 flag tells a retry wrapper whether another attempt makes sense.
         """
+        # Credentials come from the environment, never from source code; fail clearly if unset.
         if not self.api_key:
             raise ValueError("LLM_API_KEY environment variable is not configured")
         if not self.model:
@@ -79,6 +82,8 @@ class HttpLLMClient:
         if not self.api_base:
             raise ValueError("LLM_API_BASE environment variable is not configured")
 
+        # Security: only https is allowed (the API key travels in a header); plain http is
+        # permitted for a local server only.
         parsed_base = urllib.parse.urlparse(self.api_base)
         is_local = parsed_base.hostname in {"localhost", "127.0.0.1", "::1"}
         if parsed_base.scheme != "https" and not (parsed_base.scheme == "http" and is_local):
@@ -93,7 +98,7 @@ class HttpLLMClient:
             {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.0,
+                "temperature": 0.0,  # 0 = as deterministic as the service allows
             }
         ).encode("utf-8")
 
@@ -106,7 +111,9 @@ class HttpLLMClient:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
             content = data["choices"][0]["message"]["content"]
+        # HTTPError must be caught before OSError (it is a subclass of it).
         except urllib.error.HTTPError as err:
+            # 429 and 5xx may succeed later; other 4xx (bad request, bad key) never will.
             retryable = err.code == _HTTP_TOO_MANY_REQUESTS or err.code >= _HTTP_SERVER_ERROR
             raise LLMClientError(
                 f"HTTP LLM generation failed: status {err.code}", retryable=retryable
@@ -129,6 +136,7 @@ def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:
             would look like "no aspects", and ``str(None)`` would turn null into ``"None"``.
     """
     parsed: list[dict[str, str]] = []
+    # Strict on purpose: silently dropping a malformed item would look like "no aspects".
     for item in items:
         if not isinstance(item, dict) or "aspect" not in item or "sentiment" not in item:
             raise ValueError(f"item must be an object with 'aspect' and 'sentiment': {item!r}")
@@ -138,6 +146,7 @@ def _validate_raw_list(items: list[object]) -> list[dict[str, str]]:
         parsed.append(
             {
                 "aspect": str(item["aspect"]),
+                # Normalise case/whitespace so "Positive " is accepted as "positive".
                 "sentiment": str(item["sentiment"]).lower().strip(),
             }
         )
@@ -150,6 +159,8 @@ def _find_json_array(text: str) -> list[object] | None:
     Scans every ``[`` so that prose, code fences and empty arrays (``"Sure! []"``) work.
     A single object that is not wrapped in an array is not accepted.
     """
+    # raw_decode parses ONE JSON value starting at an index and ignores trailing text, which
+    # is exactly what is needed to pull an array out of chatty LLM output.
     decoder = json.JSONDecoder()
     for start, char in enumerate(text):
         if char != "[":
@@ -157,7 +168,7 @@ def _find_json_array(text: str) -> list[object] | None:
         try:
             value, _ = decoder.raw_decode(text, start)
         except json.JSONDecodeError:
-            continue
+            continue  # this "[" was not the start of valid JSON (e.g. "[note]"); try the next one
         if isinstance(value, list) and all(isinstance(item, dict) for item in value):
             return value
     return None
@@ -184,11 +195,13 @@ def parse_llm_json(response: str) -> list[dict[str, str]]:
         ValueError: If the response is empty or whitespace-only, no JSON array can be
             found, an item lacks ``aspect`` or ``sentiment``, or either of them is null.
     """
+    # An empty reply is an error (not "no aspects") so the retry wrapper can ask again.
     cleaned = response.strip()
     if not cleaned:
         raise ValueError("Empty response from the language model")
 
     items = _find_json_array(cleaned)
     if items is None:
+        # Only the first 100 characters are echoed to keep error messages short.
         raise ValueError(f"Could not parse valid JSON array from response: {cleaned[:100]!r}")
     return _validate_raw_list(items)

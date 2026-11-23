@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from absa.config import SENTIMENT_LABELS
 from absa.data.schema import validate_record
 
+# Default label <-> id maps (all four labels). A model trained without "conflict" passes
+# its own ``labels`` to the builders below instead.
 SENTIMENT_TO_ID: dict[str, int] = {label: idx for idx, label in enumerate(SENTIMENT_LABELS)}
 ID_TO_SENTIMENT: dict[int, str] = dict(enumerate(SENTIMENT_LABELS))
 
@@ -40,6 +42,7 @@ def _label_ids(labels: Sequence[str]) -> dict[str, int]:
 
 def _sentence_id(record: Mapping[str, object]) -> str | None:
     """Return the record's sentence id, preferring ``sentence_id`` over ``id``."""
+    # Accept either key name so records from different sources work; empty values are skipped.
     for key in ("sentence_id", "id"):
         value = record.get(key)
         if value is not None and str(value) != "":
@@ -67,6 +70,7 @@ def build_pair_example(
     Raises:
         ValueError: If the record is invalid or its sentiment is not in ``labels``.
     """
+    # Validate first so an invalid record fails here with a clear message, not later in training.
     validated = validate_record(record, labels)
     sentiment = str(validated["sentiment"])
     if example_id is None:
@@ -91,6 +95,8 @@ def build_pair_dataset(
     share an id. Records without a ``sentence_id`` (or ``id``) use their position in
     ``records`` as the sentence id.
     """
+    # ``seen`` counts aspects per sentence so ids like "12_0", "12_1" stay unique even when
+    # one sentence has several aspects.
     examples: list[BertPairExample] = []
     seen: dict[str, int] = {}
     for position, rec in enumerate(records):

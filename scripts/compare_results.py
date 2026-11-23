@@ -22,11 +22,13 @@ from typing import cast
 
 from absa.config import DOMAINS, OUTPUTS_DIR
 
+# One long-format row per (setting, approach, domain, metric); easy to filter in a CSV.
 COLUMNS = ("setting", "approach", "domain", "metric", "value", "source")
 Row = dict[str, str]
 
 
 def _load(path: Path) -> Mapping[str, object] | None:
+    # A missing file is expected (not every approach has been run), so return None, not error.
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
 
 
@@ -59,6 +61,8 @@ def collect(outputs_dir: Path) -> tuple[list[Row], list[str]]:
     """Return the result rows and the list of result files that were not found."""
     rows: list[Row] = []
     missing: list[str] = []
+    # Layout assumption: each approach writes outputs/<folder>_<domain>/summary.json.
+    # Classifiers (LSTM/BERT) answer "given an aspect, what sentiment?"
     for domain in DOMAINS:
         for approach, folder in (("LSTM with attention", "lstm"), ("BERT classifier", "bert")):
             path = outputs_dir / f"{folder}_{domain}" / "summary.json"
@@ -71,6 +75,8 @@ def collect(outputs_dir: Path) -> tuple[list[Row], list[str]]:
                 "macro F1": float(str(summary["test_macro_f1"])),
             }
             rows += _rows("given aspect", approach, domain, path, scores)
+        # Extraction approaches answer "which aspects are in the review?"; their summaries
+        # use different key names for the exact-match scores, hence the third tuple item.
         for approach, folder, key in (
             ("BERT extractor", "extractor", "test_exact"),
             ("Prompted language model", "llm", "extraction_exact"),
@@ -81,6 +87,7 @@ def collect(outputs_dir: Path) -> tuple[list[Row], list[str]]:
                 missing.append(path.as_posix())
                 continue
             rows += _rows("extraction", approach, domain, path, _prf(summary[key]))
+            # End-to-end numbers exist only if the run also classified the extracted aspects.
             if "end_to_end" in summary:
                 label = "BERT extractor + BERT classifier" if folder == "extractor" else approach
                 rows += _rows("end to end", label, domain, path, _prf(summary["end_to_end"]))
@@ -94,6 +101,7 @@ def to_markdown(rows: Sequence[Row], missing: Sequence[str]) -> str:
         selected = [r for r in rows if r["setting"] == setting]
         if not selected:
             continue
+        # dict.fromkeys de-duplicates while keeping first-seen order (a set would shuffle it).
         metrics = list(dict.fromkeys(r["metric"] for r in selected))
         lines += [
             f"## {setting.capitalize()}",
@@ -122,6 +130,7 @@ def write_charts(rows: Sequence[Row], output_dir: Path) -> list[Path]:
     """Write one grouped bar chart per setting (the F1 or macro F1 of every approach)."""
     import matplotlib  # noqa: PLC0415  (only needed for charts)
 
+    # "Agg" = render to files without a display, so this also works on servers and in CI.
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt  # noqa: PLC0415
 
@@ -136,6 +145,7 @@ def write_charts(rows: Sequence[Row], output_dir: Path) -> list[Path]:
             continue
         approaches = list(dict.fromkeys(r["approach"] for r in selected))
         figure, axis = plt.subplots(figsize=(7, 3.6))
+        # Grouped bars: total group width 0.8, split evenly between the domains.
         width = 0.8 / len(DOMAINS)
         for index, domain in enumerate(DOMAINS):
             values = [
@@ -146,7 +156,7 @@ def write_charts(rows: Sequence[Row], output_dir: Path) -> list[Path]:
                             for r in selected
                             if (r["approach"], r["domain"]) == (a, domain)
                         ),
-                        "0",
+                        "0",  # an approach without a result for this domain plots as 0
                     )
                 )
                 for a in approaches
@@ -156,7 +166,7 @@ def write_charts(rows: Sequence[Row], output_dir: Path) -> list[Path]:
         axis.set_xticks(
             [i + width * (len(DOMAINS) - 1) / 2 for i in range(len(approaches))], approaches
         )
-        axis.set_ylim(0, 1)
+        axis.set_ylim(0, 1)  # all metrics are fractions, so a fixed axis keeps charts comparable
         axis.set_ylabel(metric)
         axis.set_title(f"{setting.capitalize()}: {metric} on the test file")
         axis.legend()
@@ -164,7 +174,7 @@ def write_charts(rows: Sequence[Row], output_dir: Path) -> list[Path]:
         figure.tight_layout()
         path = output_dir / f"{setting.replace(' ', '_')}.png"
         figure.savefig(path, dpi=150)
-        plt.close(figure)
+        plt.close(figure)  # free memory: figures accumulate otherwise
         written.append(path)
     return written
 
@@ -177,6 +187,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     output_dir = args.output_dir or args.outputs_dir / "comparison"
     rows, missing = collect(args.outputs_dir)
+    # Nothing to compare is an error, so a CI step does not "succeed" on empty output.
     if not rows:
         print("no result files found", file=sys.stderr)
         return 1

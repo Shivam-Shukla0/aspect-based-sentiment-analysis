@@ -6,10 +6,14 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+# BIO scheme: O = outside any aspect, B-ASP = first token of an aspect, I-ASP = continuation.
+# Only one entity type (ASP) is needed here, so there are just three tags.
 BIO_TAGS: tuple[str, ...] = ("O", "B-ASP", "I-ASP")
 TAG_TO_ID: dict[str, int] = {tag: idx for idx, tag in enumerate(BIO_TAGS)}
 ID_TO_TAG: dict[int, str] = dict(enumerate(BIO_TAGS))
 
+# A token is either a run of word characters or a single punctuation mark; whitespace is
+# skipped. Simple and deterministic, but NOT the same as BERT word pieces.
 _TOKEN_RE = re.compile(r"\w+|[^\w\s]")
 
 
@@ -74,8 +78,10 @@ def align_bio_tags(
             span already tagged (for example ``(0, 7)`` and ``(8, 15)`` on
             ``"hard drive fast"`` both cut ``drive``).
     """
+    # Start with everything outside; spans then overwrite the tokens they cover.
     tags = ["O"] * len(tokens)
     claimed: set[int] = set()
+    # Process spans left to right so the overlap check below only needs the previous end.
     sorted_spans = sorted(aspect_spans, key=lambda s: (s[0], s[1]))
 
     previous_end = 0
@@ -85,12 +91,15 @@ def align_bio_tags(
         if span_start < previous_end:
             raise ValueError(f"aspect span {(span_start, span_end)} overlaps an earlier span")
         previous_end = span_end
+        # A token is covered if its interval intersects the span (strict inequalities because
+        # ends are exclusive); this is why a span cutting a token still tags the whole token.
         covered = [i for i, t in enumerate(tokens) if t.end > span_start and t.start < span_end]
         if not covered:
             raise ValueError(f"aspect span {(span_start, span_end)} does not cover any token")
         if claimed.intersection(covered):
             raise ValueError(f"aspect span {(span_start, span_end)} reaches a token already tagged")
         claimed.update(covered)
+        # First covered token begins the aspect, the rest continue it.
         tags[covered[0]] = "B-ASP"
         for idx in covered[1:]:
             tags[idx] = "I-ASP"
@@ -126,10 +135,12 @@ def spans_from_tags(
         if tag not in TAG_TO_ID:
             raise ValueError(f"unknown BIO tag {tag!r}")
         if tag == "B-ASP":
-            spans.append((token.start, token.end))
+            spans.append((token.start, token.end))  # open a new span at this token
         elif tag == "I-ASP":
+            # I-ASP is only legal directly after B-ASP/I-ASP; otherwise there is no span to extend.
             if previous == "O":
                 raise ValueError("I-ASP tag does not follow B-ASP or I-ASP")
+            # Extend the span opened last: keep its start, move its end to this token.
             spans[-1] = (spans[-1][0], token.end)
         previous = tag
     return spans
@@ -148,11 +159,14 @@ def build_bio_example(
     Raises:
         ValueError: If a span ends after the end of ``text`` or is otherwise invalid.
     """
+    # Validate against the raw text first: align_bio_tags only sees tokens and could not
+    # tell that a span runs past the end of the sentence.
     for start, end in aspect_spans:
         if end > len(text):
             raise ValueError(f"aspect span ({start}, {end}) ends after the text ({len(text)})")
     token_spans = tokenize_with_offsets(text)
     tags = align_bio_tags(token_spans, aspect_spans)
+    # Integer ids are what a model's loss function consumes; strings are for humans.
     tag_ids = [TAG_TO_ID[t] for t in tags]
     return BioExample(
         example_id=example_id,

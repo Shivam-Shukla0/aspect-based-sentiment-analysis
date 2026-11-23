@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+# A span is (start_char, end_char), end exclusive, as in the SemEval annotations.
 Span = tuple[int, int]
 
 
@@ -55,6 +56,7 @@ def compute_span_counts(
         even though a different pairing would score higher. Pass predictions sorted by
         start offset for reproducible results.
     """
+    # Indices of gold spans already claimed, so one gold span can never be counted twice.
     matched_gold: set[int] = set()
     tp = 0
 
@@ -62,6 +64,8 @@ def compute_span_counts(
         for g_idx, (g_start, g_end) in enumerate(gold_spans):
             if g_idx in matched_gold:
                 continue
+            # Exact: identical boundaries. Overlap: the two half-open intervals intersect,
+            # i.e. the later start is still before the earlier end.
             is_match = (
                 (p_start == g_start and p_end == g_end)
                 if exact_match
@@ -72,6 +76,8 @@ def compute_span_counts(
                 tp += 1
                 break
 
+    # Every prediction that matched nothing is a false positive; every gold span left
+    # unmatched is a false negative.
     fp = len(pred_spans) - tp
     fn = len(gold_spans) - tp
     return tp, fp, fn
@@ -101,6 +107,7 @@ def evaluate_extraction_spans(
             "gold and predicted span lists must have the same number of sentences: "
             f"{len(gold_spans_list)} != {len(pred_spans_list)}"
         )
+    # Micro-averaging: sum the counts over all sentences first, then compute P/R/F1 once.
     total_tp = 0
     total_fp = 0
     total_fn = 0
@@ -111,6 +118,7 @@ def evaluate_extraction_spans(
         total_fp += fp
         total_fn += fn
 
+    # Each ratio is guarded so an empty denominator gives 0.0 instead of ZeroDivisionError.
     denom_p = total_tp + total_fp
     denom_r = total_tp + total_fn
     precision = total_tp / denom_p if denom_p > 0 else 0.0

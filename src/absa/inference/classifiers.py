@@ -18,6 +18,7 @@ from absa.inference.interface import (
     validate_prediction_record,
 )
 
+# Any function mapping (review, aspect) -> sentiment label can be wrapped as a predictor.
 Classify = Callable[[str, str], str]
 
 
@@ -39,8 +40,10 @@ class AspectClassifierPredictor:
         """Return the sentiment label of ``aspect`` in ``review``."""
         try:
             return self._classify(review, aspect)
+        # Our own InferenceErrors already carry a clear message: pass them through unchanged.
         except InferenceError:
             raise
+        # Anything else (torch, tokenizer, ...) is wrapped so callers handle ONE error type.
         except Exception as err:
             raise InferenceError(f"Prediction failed: {err}") from err
 
@@ -51,11 +54,13 @@ class AspectClassifierPredictor:
             InferenceError: If the review or an aspect is empty, or the model fails.
             PredictionValidationError: If an aspect does not occur in the review.
         """
+        # Validate input up front so bad requests fail fast, before running the model.
         if not review.strip() or not aspects or any(not aspect.strip() for aspect in aspects):
             raise InferenceError("a review and at least one non-empty aspect are required")
         predictions = tuple(
             AspectPrediction(aspect, self.predict_aspect(review, aspect)) for aspect in aspects
         )
+        # Final contract check: e.g. rejects an aspect that does not occur in the review.
         return validate_prediction_record(PredictionRecord(review, predictions))
 
 
@@ -66,6 +71,7 @@ def load_lstm_predictor(checkpoint: str | Path, device: str = "cpu") -> AspectCl
         CheckpointNotFoundError: If ``checkpoint`` does not exist.
     """
     path = require_checkpoint(checkpoint)
+    # Imported inside the function: torch is heavy and only needed once a model is loaded.
     from absa.models import load_checkpoint, predict  # noqa: PLC0415  (needs torch)
 
     model, vocab = load_checkpoint(path)
@@ -88,6 +94,8 @@ def load_bert_predictor(model_dir: str | Path, device: str = "cpu") -> AspectCla
     from absa.models import BertConfig, load_bert, predict_bert  # noqa: PLC0415  (needs torch)
 
     model, tokenizer, labels = load_bert(path)
+    # Inference-only config: bf16 off for portability; "conflict" is dropped exactly when the
+    # trained label set does not contain it, so prediction matches how training was done.
     config = BertConfig(device=device, bf16=False, drop_conflict="conflict" not in labels)
 
     def classify(review: str, aspect: str) -> str:

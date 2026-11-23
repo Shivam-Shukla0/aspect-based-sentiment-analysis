@@ -25,6 +25,8 @@ def aspect_frequency(
     deterministic for a given input order.
     """
     counts = Counter(str(record["aspect"]) for record in records)
+    # sorted() is stable and Counter preserves first-seen order, so equal counts keep
+    # their first-appearance order (this is what makes the result deterministic).
     ordered = sorted(counts.items(), key=lambda pair: -pair[1])
     return ordered[:top_n] if top_n is not None else ordered
 

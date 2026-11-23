@@ -17,6 +17,8 @@ from pathlib import Path
 
 from absa.config import SENTIMENT_LABELS
 
+# Fixed list of defect categories; ValidationSummary.counts always reports all of them
+# (with 0 where none occurred) so reports have a stable shape.
 ERROR_TYPES = ("empty_review", "empty_aspect", "unknown_sentiment", "offset_mismatch")
 
 
@@ -46,6 +48,7 @@ class ValidationSummary:
         """Return a JSON-serialisable representation of this summary."""
         return {
             "total_records": self.total,
+            # Distinct indices: one record with two defects still counts as one invalid record.
             "invalid_records": len({error.index for error in self.errors}),
             "error_counts": self.counts,
             "errors": [
@@ -63,6 +66,8 @@ class ValidationSummary:
 def _validate_one(
     index: int, record: Mapping[str, object], allowed_labels: Sequence[str]
 ) -> list[RecordError]:
+    # Collect every problem in a record instead of stopping at the first one, so a single
+    # pass gives a complete report.
     errors = []
     review = record.get("review")
     aspect = record.get("aspect")
@@ -77,6 +82,8 @@ def _validate_one(
                 index, "unknown_sentiment", f"sentiment {sentiment!r} not in {allowed_labels}"
             )
         )
+    # Offsets are optional. The extra isinstance checks (note bool is an int subclass in
+    # Python) make sure slicing below is only attempted on well-typed values.
     start, end = record.get("start"), record.get("end")
     if (
         isinstance(start, int)
@@ -117,4 +124,5 @@ def validate_records(
 def read_jsonl(path: Path) -> list[dict[str, object]]:
     """Read one JSON object per line from ``path``, skipping blank lines."""
     with path.open(encoding="utf-8") as handle:
+        # Blank lines are skipped so a trailing newline does not raise a JSON error.
         return [json.loads(line) for line in handle if line.strip()]

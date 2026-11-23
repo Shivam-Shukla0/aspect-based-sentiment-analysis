@@ -22,7 +22,11 @@ def lazy_getattr(package_name: str, lazy_names: dict[str, str], name: str) -> An
     still surfaces as a normal ``ImportError`` the moment that name is
     actually used, not when the package itself is imported.
     """
+    # Unknown names must raise AttributeError (not KeyError): hasattr()/getattr(default)
+    # and import machinery rely on that exact exception type.
     submodule_name = lazy_names.get(name)
     if submodule_name is None:
         raise AttributeError(f"module {package_name!r} has no attribute {name!r}")
+    # The import happens only now, on first access; Python then caches the module, so
+    # repeated lookups are cheap.
     return getattr(importlib.import_module(submodule_name), name)

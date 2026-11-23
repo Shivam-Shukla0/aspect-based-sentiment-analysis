@@ -44,12 +44,15 @@ class CategoryAnnotation:
 
 def _parse_tree(path: Path) -> etree._Element:
     """Parse ``path`` with entity resolution and network access disabled."""
+    # Hardening: no entity expansion, no network and no DTD loading, so an untrusted XML
+    # file cannot trigger XXE or "billion laughs" style attacks.
     parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
     return etree.parse(str(path), parser).getroot()
 
 
 def _require_attr(element: etree._Element, name: str, context: str) -> str:
     value = element.get(name)
+    # lxml returns None for an absent attribute; report which element/attribute was missing.
     if not isinstance(value, str):
         raise ValueError(f"{context}: missing required attribute {name!r}")
     return value
@@ -57,6 +60,7 @@ def _require_attr(element: etree._Element, name: str, context: str) -> str:
 
 def _parse_spans(element: etree._Element, sentence_id: str) -> tuple[AspectSpan, ...]:
     terms_element = element.find("aspectTerms")
+    # No <aspectTerms> element means "no annotation" (distinct from an empty element).
     if terms_element is None:
         return ()
     spans = []
@@ -66,6 +70,7 @@ def _parse_spans(element: etree._Element, sentence_id: str) -> tuple[AspectSpan,
         polarity = _require_attr(term, "polarity", context)
         from_text = _require_attr(term, "from", context)
         to_text = _require_attr(term, "to", context)
+        # from/to are XML strings; convert and give a clear error instead of a bare int() failure.
         try:
             start, end = int(from_text), int(to_text)
         except ValueError as exc:
@@ -85,6 +90,7 @@ def _parse_sentence(element: etree._Element) -> ParsedSentence:
     if text_element is None or text_element.text is None:
         raise ValueError(f"<sentence id={sentence_id!r}>: missing <text>")
     spans = _parse_spans(element, sentence_id)
+    # ParsedSentence validates that every span offset really matches the sentence text.
     try:
         return ParsedSentence(sentence_id=sentence_id, text=text_element.text, spans=spans)
     except ValueError as exc:
@@ -123,6 +129,7 @@ def parse_restaurant_xml(path: Path) -> tuple[list[ParsedSentence], list[Categor
     separately, since a category is not an aspect term and must not be
     used as one.
     """
+    # Parse the tree once and reuse the elements for both terms and categories.
     elements = _parse_tree(path).findall("sentence")
     sentences = [_parse_sentence(element) for element in elements]
     categories = [

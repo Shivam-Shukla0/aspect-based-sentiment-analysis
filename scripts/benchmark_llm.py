@@ -29,6 +29,7 @@ from absa.extraction.prompts import PROMPT_VERSION, format_few_shot_prompt, form
 from absa.models.llm import parse_llm_json
 from absa.models.llm_validation import ValidationReport, validate_aspect_predictions
 
+# (start_char, end_char, sentiment), the same unit used by end-to-end evaluation.
 Pair = tuple[int, int, str]
 
 
@@ -62,12 +63,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def interpret(sentence: Sentence, raw: str) -> tuple[tuple[Pair, ...], bool, int]:
     """Parse and validate one answer; return the pairs, whether parsing failed, invalid count."""
+    # Two-stage check: (1) is the reply valid JSON of the expected shape? (2) do the aspects
+    # really occur in the sentence with a known label? Failures are counted, never hidden.
     try:
         parsed = parse_llm_json(raw)
     except ValueError:
         return (), True, 0
     report = ValidationReport()
     valid = validate_aspect_predictions(sentence.text, parsed, report)
+    # Sorted by position so scoring does not depend on the order the model listed aspects.
     pairs = tuple(sorted((v.start, v.end, v.sentiment) for v in valid))
     return pairs, False, report.invalid_count
 
@@ -82,8 +86,10 @@ def collect_answers(
     answers: list[Answer] = []
     for offset in range(0, len(sentences), batch_size):
         chunk = sentences[offset : offset + batch_size]
+        # perf_counter is a monotonic high-resolution clock, right for measuring durations.
         started = time.perf_counter()
         raws = generate_batch([prompt_for(s.text) for s in chunk])
+        # Batch time divided by batch size = the average per-sentence latency.
         latency = (time.perf_counter() - started) / len(chunk)
         for sentence, raw in zip(chunk, raws, strict=True):
             pairs, failed, invalid = interpret(sentence, raw)
@@ -93,10 +99,13 @@ def collect_answers(
 
 def score(sentences: Sequence[Sentence], answers: Sequence[Answer]) -> dict[str, object]:
     """Score extraction and end-to-end results and count invalid output."""
+    # Same answers scored two ways: spans only (extraction) and span+label (end to end).
     spans = [[(start, end) for start, end, _ in a.pairs] for a in answers]
     report = span_report([s.text for s in sentences], [s.gold_spans for s in sentences], spans)
+    # Gold "conflict" aspects are excluded from the end-to-end gold (see module docstring).
     gold_pairs = [[p for p in s.spans if p[2] != "conflict"] for s in sentences]
     end_to_end = evaluate_end_to_end(gold_pairs, [list(a.pairs) for a in answers])
+    # Sorted so the median can be read from the middle element.
     latencies = sorted(a.latency_seconds for a in answers)
     return {
         "extraction_exact": report["exact"],
@@ -127,6 +136,9 @@ def _save(path: Path, sentences: Sequence[Sentence], answers: Sequence[Answer]) 
 
 
 def _from_saved(sentences: Sequence[Sentence], path: Path) -> list[Answer]:
+    # Index saved answers by (id, text) so replay works even if the order or the subset
+    # (--limit) changed. Re-interpreting the raw text lets scoring code be fixed and re-run
+    # without calling the model again.
     saved = {(r["sentence_id"], r["review"]): r for r in read_jsonl(path)}
     answers = []
     for sentence in sentences:
@@ -152,9 +164,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.limit:
         sentences = sentences[: args.limit]
 
+    # Two modes: replay saved answers (no GPU, no model) or generate fresh ones.
     if args.from_responses:
         answers = _from_saved(sentences, args.from_responses)
     else:
+        # Imported only on this branch so replay mode works without torch installed.
         from absa.models.llm_local import LocalLLMClient  # noqa: PLC0415  (needs torch)
 
         client = LocalLLMClient(args.model_name, args.device, args.max_new_tokens)
@@ -165,6 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _save(output_dir / "responses.jsonl", sentences, answers)
 
     result = score(sentences, answers)
+    # Error details go to test_report.json; the compact numbers go to summary.json.
     report = {k: result[k] for k in ("error_counts", "error_examples")}
     (output_dir / "test_report.json").write_text(json.dumps(report, indent=2) + "\n", "utf-8")
     summary = {

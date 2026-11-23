@@ -14,8 +14,12 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
+# Reserved vocabulary entries: padding fills short sequences; unknown stands in for any
+# word not seen in training. They always occupy indices 0 and 1 (see Vocabulary).
 PAD_TOKEN = "<pad>"  # noqa: S105 (a vocabulary marker, not a secret)
 UNK_TOKEN = "<unk>"  # noqa: S105
+# Lowercase alphanumeric runs OR any single non-space character (punctuation). Text is
+# lowercased before matching, so only [a-z0-9] needs to be listed.
 _TOKEN_RE = re.compile(r"[a-z0-9]+|[^\sa-z0-9]")
 
 
@@ -39,6 +43,7 @@ class Vocabulary:
         if list(tokens[:2]) != [PAD_TOKEN, UNK_TOKEN]:
             raise ValueError(f"tokens must start with [{PAD_TOKEN!r}, {UNK_TOKEN!r}]")
         self._tokens = tuple(tokens)
+        # Reverse lookup (token -> id) built once so encode() is O(1) per token.
         self._index = {token: index for index, token in enumerate(self._tokens)}
 
     @property
@@ -62,6 +67,8 @@ class Vocabulary:
 
     def encode(self, tokens: Iterable[str]) -> list[int]:
         """Map each token to its index, or to ``unk_id`` if it was never seen."""
+        # Out-of-vocabulary words fall back to <unk> instead of raising, so unseen test words
+        # are handled gracefully.
         return [self._index.get(token, self.unk_id) for token in tokens]
 
     def decode(self, ids: Iterable[int]) -> list[str]:
@@ -86,11 +93,14 @@ class Vocabulary:
         descending frequency and then alphabetically, so the result is
         deterministic regardless of the input order.
         """
+        # Count tokens, drop rare ones (min_freq), then sort by (-frequency, token): the
+        # alphabetical tie-break makes the vocabulary identical for any input order.
         counts = Counter(token for text in texts for token in tokenize(text))
         kept = sorted(
             (token for token, count in counts.items() if count >= min_freq),
             key=lambda token: (-counts[token], token),
         )
+        # Reserved tokens first so pad_id == 0 and unk_id == 1 always hold.
         return cls([PAD_TOKEN, UNK_TOKEN, *kept])
 
 
@@ -98,6 +108,7 @@ def pad_or_truncate(ids: Sequence[int], length: int, pad_id: int) -> list[int]:
     """Return ``ids`` truncated or right-padded with ``pad_id`` to exactly ``length``."""
     if length <= 0:
         raise ValueError(f"length must be positive, got {length}")
+    # Too long -> cut the tail; too short -> append padding on the right.
     if len(ids) >= length:
         return list(ids[:length])
     return [*ids, *([pad_id] * (length - len(ids)))]

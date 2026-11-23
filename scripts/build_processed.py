@@ -28,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse, normalize and write the processed files; return the process exit code."""
     args = build_parser().parse_args(argv)
+    # The restaurant parser also returns category annotations; only the term-level sentences
+    # ([0]) are used here because categories are not part of the aspect-record schema.
     sentences = (
         parse_laptop_xml(args.input)
         if args.domain == "laptop"

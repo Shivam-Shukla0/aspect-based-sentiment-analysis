@@ -8,8 +8,11 @@ from typing import Final
 
 from absa.config import SENTIMENT_LABELS
 
+# Bump this (and add a new prompt_files/<version>/ folder) whenever prompt wording changes,
+# so results can always be traced back to the exact prompt that produced them.
 PROMPT_VERSION: Final[str] = "v1.0"
 
+# importlib.resources locates the packaged prompt text files, even when installed as a wheel.
 PROMPT_DIR = files("absa.extraction").joinpath("prompt_files").joinpath(PROMPT_VERSION)
 
 
@@ -22,6 +25,8 @@ def load_prompt_file(name: str) -> str:
     return text.removesuffix("\n")
 
 
+# The allowed sentiment labels are injected from config so the prompt can never drift
+# from the labels the evaluation code accepts.
 SYSTEM_INSTRUCTION: Final[str] = load_prompt_file("system.txt").format(
     labels=", ".join(SENTIMENT_LABELS)
 )
@@ -36,6 +41,8 @@ def _quote(review: str) -> str:
     return json.dumps(review, ensure_ascii=False)
 
 
+# Hand-written demonstrations covering both domains and every label, including a
+# "conflict" case and a neutral, purely descriptive mention.
 FEW_SHOT_EXAMPLES: Final[tuple[dict[str, object], ...]] = (
     {
         "review": "The battery life is exceptional, but the keyboard feels cheap.",
@@ -69,11 +76,14 @@ FEW_SHOT_EXAMPLES: Final[tuple[dict[str, object], ...]] = (
 
 def format_zero_shot_prompt(review: str) -> str:
     """Generate a formatted zero-shot prompt for a given review."""
+    # The review is JSON-quoted before insertion so review text cannot be mistaken for
+    # instructions (a basic guard against prompt injection).
     return ZERO_SHOT_TEMPLATE.format(review=_quote(review))
 
 
 def format_few_shot_prompt(review: str) -> str:
     """Generate a formatted few-shot prompt with hand-written example reviews."""
+    # Build "Review / Output JSON" pairs so the model sees the exact format to imitate.
     examples_str = ""
     for ex in FEW_SHOT_EXAMPLES:
         rev = str(ex["review"])

@@ -70,6 +70,8 @@ class Predictor(Protocol):
         ...
 
 
+# Module-level registry: model name (lower-case) -> factory that builds the predictor.
+# Factories (not instances) are stored so heavy models load only when requested.
 _REGISTRY: dict[str, Callable[[], Predictor]] = {}
 
 
@@ -81,6 +83,7 @@ def register_predictor(
     Raises:
         DuplicateModelError: If ``name`` is already registered and ``replace`` is False.
     """
+    # Normalise the name so "BERT" and " bert " refer to the same model.
     key = name.lower().strip()
     if key in _REGISTRY and not replace:
         raise DuplicateModelError(f"Model {name!r} is already registered; pass replace=True")
@@ -100,7 +103,7 @@ def get_predictor(name: str) -> Predictor:
     """
     key = name.lower().strip()
     if key not in _REGISTRY:
-        available = sorted(_REGISTRY.keys())
+        available = sorted(_REGISTRY.keys())  # list valid names in the error to help the user
         raise ModelNotFoundError(f"Model {name!r} is not registered. Available models: {available}")
     return _REGISTRY[key]()
 
@@ -137,6 +140,7 @@ def validate_prediction_record(
     if not isinstance(record, PredictionRecord):
         raise PredictionValidationError(f"expected a PredictionRecord, got {type(record).__name__}")
     for prediction in record.predictions:
+        # Reuse the data-schema validator so model output obeys the same rules as dataset records.
         try:
             validate_record(
                 {
@@ -148,6 +152,7 @@ def validate_prediction_record(
             )
         except ValueError as err:
             raise PredictionValidationError(f"invalid prediction {prediction!r}: {err}") from err
+        # Guards against hallucinated aspects: a prediction must be grounded in the review text.
         if prediction.aspect.lower() not in record.review.lower():
             raise PredictionValidationError(
                 f"aspect {prediction.aspect!r} does not occur in the review"
@@ -169,6 +174,7 @@ def predict_validated(
         InferenceError: If ``review`` is empty or the predictor fails.
         PredictionValidationError: If the predictor output is invalid.
     """
+    # Validate the INPUT before calling the model, so bad input is not blamed on the model.
     if not isinstance(review, str) or not review.strip():
         raise InferenceError("input review must be a non-empty string")
     try:
@@ -177,6 +183,7 @@ def predict_validated(
         raise
     except Exception as err:
         raise InferenceError(f"Prediction failed: {err}") from err
+    # A predictor must echo the review it was given; a mismatch means mixed-up results.
     if isinstance(record, PredictionRecord) and record.review != review:
         raise PredictionValidationError("the returned review differs from the input review")
     return validate_prediction_record(record, allowed_labels)
